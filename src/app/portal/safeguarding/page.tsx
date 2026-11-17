@@ -1,6 +1,7 @@
 import { requireUser, canForCampus } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { preferredCampusId, resolveCampusId } from "@/lib/campus-preference";
 
 export const metadata = { title: "Safeguarding" };
 
@@ -18,9 +19,9 @@ export default async function SafeguardingPage({
   });
 
   // safeguarding.case.read is NOT in any default role — deliberately narrow.
-  const campusId =
-    params.campusId ??
-    campuses.find((c) => canForCampus(ctx, "safeguarding.case.read", c.id))?.id;
+  const accessible = campuses.filter((c) => canForCampus(ctx, "safeguarding.case.read", c.id));
+  const preferred = await preferredCampusId(ctx, "safeguarding.case.read");
+  const campusId = resolveCampusId(params.campusId, preferred, accessible);
 
   if (!campusId || !canForCampus(ctx, "safeguarding.case.read", campusId)) {
     redirect("/portal");

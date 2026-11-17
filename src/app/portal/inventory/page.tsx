@@ -1,6 +1,7 @@
 import { requirePermission, canForCampus } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { preferredCampusId, resolveCampusId } from "@/lib/campus-preference";
 
 export const metadata = { title: "Inventory" };
 
@@ -17,9 +18,9 @@ export default async function InventoryPage({
     orderBy: { name: "asc" },
   });
 
-  const campusId =
-    params.campusId ??
-    campuses.find((c) => canForCampus(ctx, "inventory.read", c.id))?.id;
+  const accessible = campuses.filter((c) => canForCampus(ctx, "inventory.read", c.id));
+  const preferred = await preferredCampusId(ctx, "inventory.read");
+  const campusId = resolveCampusId(params.campusId, preferred, accessible);
 
   const items = campusId
     ? await prisma.inventoryItem.findMany({

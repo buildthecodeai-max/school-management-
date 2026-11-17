@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { approveLeaveHr } from "./actions";
 import { AddStaffForm } from "./AddStaffForm";
+import { preferredCampusId, resolveCampusId } from "@/lib/campus-preference";
 
 export const metadata = { title: "Human Resources" };
 
@@ -19,9 +20,9 @@ export default async function HrPage({
     orderBy: { name: "asc" },
   });
 
-  const campusId =
-    params.campusId ??
-    campuses.find((c) => canForCampus(ctx, "hr.staff.read", c.id))?.id;
+  const accessible = campuses.filter((c) => canForCampus(ctx, "hr.staff.read", c.id));
+  const preferred = await preferredCampusId(ctx, "hr.staff.read");
+  const campusId = resolveCampusId(params.campusId, preferred, accessible);
 
   const tab = params.tab ?? "staff";
 

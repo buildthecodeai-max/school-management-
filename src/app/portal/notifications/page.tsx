@@ -52,6 +52,11 @@ export default async function NotificationsOpsPage({
       <PageHeader
         title="Notification delivery log"
         subtitle="Every external delivery attempt with provider, status, correlation id and failure reason (NTF-003)."
+        action={
+          <Link href="/portal/notifications/templates" className="rounded-lg border border-[color:var(--color-line)] bg-white px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-50">
+            Message templates →
+          </Link>
+        }
       />
 
       <div className="mb-4 grid grid-cols-3 gap-4">

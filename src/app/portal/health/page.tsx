@@ -1,6 +1,7 @@
 import { requireUser, canForCampus } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { preferredCampusId, resolveCampusId } from "@/lib/campus-preference";
 
 export const metadata = { title: "Health Records" };
 
@@ -18,9 +19,9 @@ export default async function HealthPage({
   });
 
   // health.record.read is NOT in any default role — deliberately narrow.
-  const campusId =
-    params.campusId ??
-    campuses.find((c) => canForCampus(ctx, "health.record.read", c.id))?.id;
+  const accessible = campuses.filter((c) => canForCampus(ctx, "health.record.read", c.id));
+  const preferred = await preferredCampusId(ctx, "health.record.read");
+  const campusId = resolveCampusId(params.campusId, preferred, accessible);
 
   if (!campusId || !canForCampus(ctx, "health.record.read", campusId)) {
     redirect("/portal");

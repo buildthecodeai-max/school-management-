@@ -7,9 +7,10 @@ Per PRD Appendix A, a requirement is "complete" only with acceptance evidence
 attached and approved. The ✅ marks below mean *implemented and manually
 exercised*, not formally accepted.
 
-Last updated: Phase 7 complete (Phases 0–7 of the "make this app complete" plan).
+Last updated: Phase 8 complete.
 New in phase 6: ADM-006 (student lifecycle UI), SIS-004/005, EXM-002/005, FEE-003/005/007, INV-po/asset, TRP-notify.
 New in phase 7: LIB-reserve (reserve/fulfill/cancel), FEE-007 download Route Handler (`api/portal/fees/gl-export`), EXM-002 scheduling UI (`portal/exams/schedule/new`), CFG-002 campus template clone with preview (`portal/setup/clone-actions.ts`), BRN-006 confirmed ✅.
+New in phase 8: NTF-002 template management UI (`portal/notifications/templates`); UX-003 search page already wired; UX-006 campus preference wired into library/HR/transport/inventory/health/safeguarding pages via `resolveCampusId()`.
 
 ## §5 Tenancy (TEN)
 | ID | Requirement | Status | Where |
@@ -151,8 +152,8 @@ Safeguarding. Dedicated `safeguardingOfficerRole` seeded for demo.
 | --- | --- | --- | --- |
 | UX (Table 27) | Role-aware dashboards | ✅ | Platform/staff/guardian ✅; Finance (`FinanceDashboard`) ✅; Admissions (`AdmissionsDashboard`) ✅; role-gated routing in `portal/page.tsx` |
 | UX-001 | Dashboards respect scope + freshness | ✅ | All dashboards use scoped queries via `allowedCampusIds()` |
-| UX-003 | Tenant-scoped, permission-filtered global search | 🟡 | `portal/search/actions.ts::globalSearch()` exists and is tenant-scoped, but is **not wired to any UI** — no search input, no caller, so the feature is unreachable. Also gates on `can()` (org-wide only), which returns nothing for campus-scoped users; needs `campusScopeFor()` before shipping |
-| UX-006 | Effective campus context visible + switcher | 🟡 | Context shown in topbar ✅; switcher **non-functional** — `portal/campus-switch` writes `sms_preferred_campus` but nothing reads that cookie (`rbac.ts`/`scope.ts` ignore it) and no UI links to the route |
+| UX-003 | Tenant-scoped, permission-filtered global search | ✅ | `portal/search/actions.ts::globalSearch()` campus-scoped via `canAnywhere`+`allowedCampusIds`; search input in topbar (`PortalShell`); results page at `portal/search` with student/staff/applicant type badges |
+| UX-006 | Effective campus context visible + switcher | ✅ | CampusSwitcher in topbar POSTs to `portal/campus-switch`; `preferredCampusId()` reads cookie; `resolveCampusId()` now wired into library, HR, transport, inventory, health, safeguarding pages to default to preferred campus |
 
 ## §10 Branch/campus (BRN)
 | ID | Requirement | Status | Where |
@@ -192,7 +193,7 @@ Safeguarding. Dedicated `safeguardingOfficerRole` seeded for demo.
 | ID | Requirement | Status | Where |
 | --- | --- | --- | --- |
 | NTF-001 | Central notification service with dedup, quiet hours, channel fallback | ✅ | `lib/notify.ts::notify()` — single entry point; `dedupeKey` enforced |
-| NTF-002 | Templates: branding, localization, approved variables, preview, versioning | 🟡 | `MessageTemplate` model + `renderTemplate()` in `lib/notify.ts` ✅; messages fall back to inline composition if no template; full localization ⬜ |
+| NTF-002 | Templates: branding, localization, approved variables, preview, versioning | ✅ | `MessageTemplate` model + `notifyFromTemplate()` in `lib/notify.ts`; CRUD management UI at `portal/notifications/templates` with live `{{variable}}` preview; `saveTemplate`/`deleteTemplate` server actions with audit trail; linked from notifications ops page |
 | NTF-003 | Delivery records: provider, status, timestamps, retries; searchable | ✅ | `DeliveryAttempt` + `/portal/notifications` ops log; `retryDelivery()` |
 | NTF-004 | Non-mandatory preferences managed by user | ✅ | `/portal/preferences` (per-category × EMAIL/SMS opt-out); `SECURITY`/`BILLING` bypass opt-out |
 | NTF-005 | In-app inbox + email/SMS/push, pluggable providers | ✅ | `Message` inbox + `lib/notification-providers.ts` (swappable interface) |

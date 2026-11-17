@@ -1,6 +1,7 @@
 import { requirePermission, canForCampus } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { preferredCampusId, resolveCampusId } from "@/lib/campus-preference";
 
 export const metadata = { title: "Transport" };
 
@@ -17,9 +18,9 @@ export default async function TransportPage({
     orderBy: { name: "asc" },
   });
 
-  const campusId =
-    params.campusId ??
-    campuses.find((c) => canForCampus(ctx, "transport.read", c.id))?.id;
+  const accessible = campuses.filter((c) => canForCampus(ctx, "transport.read", c.id));
+  const preferred = await preferredCampusId(ctx, "transport.read");
+  const campusId = resolveCampusId(params.campusId, preferred, accessible);
 
   const [routes, vehicles] = campusId
     ? await Promise.all([

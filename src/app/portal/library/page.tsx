@@ -2,6 +2,7 @@ import { requirePermission, canForCampus } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { AddBookForm, ReturnBookForm } from "./LibraryForms";
+import { preferredCampusId, resolveCampusId } from "@/lib/campus-preference";
 
 export const metadata = { title: "Library" };
 
@@ -18,9 +19,9 @@ export default async function LibraryPage({
     orderBy: { name: "asc" },
   });
 
-  const campusId =
-    params.campusId ??
-    campuses.find((c) => canForCampus(ctx, "library.read", c.id))?.id;
+  const accessible = campuses.filter((c) => canForCampus(ctx, "library.read", c.id));
+  const preferred = await preferredCampusId(ctx, "library.read");
+  const campusId = resolveCampusId(params.campusId, preferred, accessible);
 
   const q = params.q?.trim();
 

@@ -458,6 +458,39 @@ export async function bulkPromoteGrade(
   return { ok: true, affectedCount: enrollments.length, message: `${enrollments.length} student(s) promoted.` };
 }
 
+// C.3: Update financiallyResponsible / canPickup / receivesNotifications flags on a guardian link.
+export async function updateGuardianLink(formData: FormData): Promise<StudentActionState> {
+  const ctx = await requireUser();
+  const id = String(formData.get("id") || "");
+  const link = await prisma.guardianRelationship.findFirst({
+    where: { id, tenantId: ctx.tenantId! },
+    include: { student: { include: { enrollments: { where: { status: "ACTIVE" }, take: 1 } } } },
+  });
+  if (!link) return { error: "Guardian link not found." };
+  const campusId = link.student.enrollments[0]?.campusId;
+  if (!campusId || !canForCampus(ctx, "student.write", campusId))
+    return { error: "You need student.write permission to edit guardian links." };
+
+  const data = {
+    financiallyResponsible: formData.get("financiallyResponsible") === "true",
+    canPickup: formData.get("canPickup") === "true",
+    receivesNotifications: formData.get("receivesNotifications") === "true",
+    isPrimaryContact: formData.get("isPrimaryContact") === "true",
+  };
+  await prisma.guardianRelationship.update({ where: { id }, data });
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: "student.guardianlink.updated",
+    targetType: "Student",
+    targetId: link.studentId,
+    campusId,
+    metadata: data,
+  });
+  revalidatePath(`/portal/students/${link.studentId}`);
+  return { ok: true, message: "Guardian link updated." };
+}
+
 // Check documents expiring within N days (SIS-004) — called by cron.
 export async function getExpiringDocuments(tenantId: string, withinDays = 30) {
   const cutoff = new Date();

@@ -24,7 +24,7 @@ export default async function BillingPage({
       ...(campusIds ? { id: { in: campusIds } } : {}),
     },
     include: {
-      feeStructures: { where: { active: true }, orderBy: { name: "asc" } },
+      feeStructures: { where: { active: true, OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }] }, orderBy: { name: "asc" } },
     },
     orderBy: { name: "asc" },
   });

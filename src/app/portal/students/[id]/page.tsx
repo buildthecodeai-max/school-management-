@@ -12,7 +12,10 @@ import {
   reenrollStudent as _reenrollStudent,
   suspendEnrollment as _suspendEnrollment,
   withdrawEnrollment as _withdrawEnrollment,
+  updateGuardianLink as _updateGuardianLink,
 } from "../actions";
+
+async function updateGuardianLink(fd: FormData) { "use server"; await _updateGuardianLink(fd); }
 
 // Plain-form wrappers — Server Action <form action> expects (formData) not (_prev, formData).
 async function transferStudentAction(fd: FormData) { "use server"; await _transferStudent({}, fd); }
@@ -206,11 +209,24 @@ export default async function StudentDetailPage({
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {g.isPrimaryContact && <Badge tone="brand">Primary</Badge>}
-                    {g.financiallyResponsible && (
-                      <Badge tone="sky">Fee payer</Badge>
-                    )}
+                    {g.financiallyResponsible && <Badge tone="sky">Fee payer</Badge>}
                     {g.canPickup && <Badge tone="green">Pickup</Badge>}
+                    {g.receivesNotifications && <Badge tone="amber">Notifications</Badge>}
                   </div>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs text-brand-700">Edit flags</summary>
+                    <form action={updateGuardianLink} className="mt-2 space-y-1 text-xs">
+                      <input type="hidden" name="id" value={g.id} />
+                      {(["isPrimaryContact", "financiallyResponsible", "canPickup", "receivesNotifications"] as const).map((f) => (
+                        <label key={f} className="flex items-center gap-2 capitalize">
+                          <input type="hidden" name={f} value="false" />
+                          <input type="checkbox" name={f} value="true" defaultChecked={g[f] as boolean} className="rounded" />
+                          {f.replace(/([A-Z])/g, " $1").toLowerCase()}
+                        </label>
+                      ))}
+                      <button className="mt-2 rounded bg-brand-600 px-3 py-1 text-white hover:bg-brand-700">Save</button>
+                    </form>
+                  </details>
                 </li>
               ))}
             </ul>

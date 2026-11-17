@@ -49,12 +49,18 @@ export default async function StudentsPage({
         title="Students"
         subtitle={`${enrollments.length} active enrollment${enrollments.length === 1 ? "" : "s"} in your scope`}
         action={
-          can(ctx, "data.import") ||
-          [...ctx.campusPermissions.values()].some((s) => s.has("data.import") || s.has("*")) ? (
-            <ButtonLink href="/portal/import" variant="ghost">
-              Import students
-            </ButtonLink>
-          ) : undefined
+          <div className="flex gap-2">
+            {(can(ctx, "student.write") || [...ctx.campusPermissions.values()].some((s) => s.has("student.write") || s.has("*"))) && (
+              <ButtonLink href="/portal/students/bulk" variant="ghost">
+                Bulk actions
+              </ButtonLink>
+            )}
+            {(can(ctx, "data.import") || [...ctx.campusPermissions.values()].some((s) => s.has("data.import") || s.has("*"))) && (
+              <ButtonLink href="/portal/import" variant="ghost">
+                Import students
+              </ButtonLink>
+            )}
+          </div>
         }
       />
 

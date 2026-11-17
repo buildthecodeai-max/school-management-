@@ -69,6 +69,8 @@ export default async function FeeStructuresPage() {
                 </ul>
                 <p className="mt-2 text-xs text-[color:var(--color-muted)]">
                   {s._count.assignments} concession assignment(s) · {s._count.invoices} invoice(s)
+                  {" · "} effective from {s.effectiveFrom.toLocaleDateString()}
+                  {s.effectiveTo && ` to ${s.effectiveTo.toLocaleDateString()}`}
                 </p>
               </Card>
             );

@@ -7,6 +7,7 @@ import { requireUser, canForCampus } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
 import { toCents } from "@/lib/money";
+import { effectiveSetting } from "@/lib/settings";
 import {
   computeInvoiceFromStructure,
   buildInstallmentSchedule,
@@ -96,6 +97,8 @@ export async function createFeeStructure(_previous: FeeSetupState, formData: For
   const lines = rawHeadIds.map((feeHeadId, index) => ({ feeHeadId, amount: toCents(rawAmounts[index] ?? "0") })).filter((line) => line.feeHeadId && line.amount > 0);
   if (!lines.length) return { error: "Add at least one fee head with a positive amount." };
   if (new Set(lines.map((line) => line.feeHeadId)).size !== lines.length) return { error: "A fee head can appear only once in a structure." };
+  const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim();
+  const effectiveTo = effectiveToRaw ? new Date(effectiveToRaw) : null;
   const [campus, grade, year, heads] = await Promise.all([
     prisma.campus.findFirst({ where: { id: campusId, tenantId } }),
     gradeLevelId ? prisma.gradeLevel.findFirst({ where: { id: gradeLevelId, tenantId, campusId } }) : Promise.resolve(null),
@@ -103,7 +106,7 @@ export async function createFeeStructure(_previous: FeeSetupState, formData: For
     prisma.feeHead.findMany({ where: { tenantId, id: { in: lines.map((line) => line.feeHeadId) } } }),
   ]);
   if (!campus || (gradeLevelId && !grade) || (academicYearId && !year) || heads.length !== lines.length) return { error: "One or more selected campus, class, session or fee heads are invalid." };
-  const structure = await prisma.feeStructure.create({ data: { tenantId, campusId, gradeLevelId, academicYearId, name, lines: { create: lines.map((line) => ({ tenantId, feeHeadId: line.feeHeadId, amount: line.amount })) } } });
+  const structure = await prisma.feeStructure.create({ data: { tenantId, campusId, gradeLevelId, academicYearId, name, effectiveTo, lines: { create: lines.map((line) => ({ tenantId, feeHeadId: line.feeHeadId, amount: line.amount })) } } });
   await audit({ tenantId, actorUserId: ctx.user.id, action: "fee.structure.created", targetType: "FeeStructure", targetId: structure.id, campusId, scopeType: "CAMPUS", metadata: { name, gradeLevelId, academicYearId, lineCount: lines.length } });
   revalidatePath("/portal/fees/structures");
   revalidatePath("/portal/fees/billing");
@@ -158,6 +161,7 @@ export async function postBillingRun(formData: FormData) {
   });
   const done = new Set(existing.map((e) => e.studentId));
 
+  const invPrefix = await effectiveSetting(ctx.tenantId!, structure.campusId, "invoice.prefix");
   let seq = await nextInvoiceNumber(ctx.tenantId!);
   let invoiceCount = 0;
   let totalAmount = 0;
@@ -213,7 +217,7 @@ export async function postBillingRun(formData: FormData) {
               campusId: structure.campusId,
               studentId: e.student.id,
               feeStructureId,
-              number: invNo(seq++),
+              number: invNo(seq++, invPrefix),
               periodLabel: instLabel,
               dueDate: installDueDate,
               subtotal: instSubtotal,
@@ -250,7 +254,7 @@ export async function postBillingRun(formData: FormData) {
           campusId: structure.campusId,
           studentId: e.student.id,
           feeStructureId,
-          number: invNo(seq),
+          number: invNo(seq, invPrefix),
           periodLabel,
           dueDate,
           subtotal: fig.subtotal,
@@ -342,6 +346,7 @@ export async function recordPayment(formData: FormData) {
   if (!canForCampus(ctx, "fee.collect", campusId))
     throw new Error("You cannot collect payments for this campus.");
 
+  const rcpPrefix = await effectiveSetting(ctx.tenantId!, campusId, "receipt.prefix");
   const seq = await nextPaymentNumber(ctx.tenantId!);
 
   await prisma.$transaction(async (tx) => {
@@ -350,7 +355,7 @@ export async function recordPayment(formData: FormData) {
         tenantId: ctx.tenantId!,
         campusId,
         studentId,
-        number: rcpNo(seq),
+        number: rcpNo(seq, rcpPrefix),
         method,
         amount,
         reference: reference || null,

@@ -90,11 +90,11 @@ export async function nextPaymentNumber(tenantId: string): Promise<number> {
   return (await prisma.payment.count({ where: { tenantId } })) + 1;
 }
 
-export function invNo(n: number): string {
-  return `INV-${String(n).padStart(6, "0")}`;
+export function invNo(n: number, prefix = "INV"): string {
+  return `${prefix}-${String(n).padStart(6, "0")}`;
 }
-export function rcpNo(n: number): string {
-  return `RCP-${String(n).padStart(6, "0")}`;
+export function rcpNo(n: number, prefix = "RCP"): string {
+  return `${prefix}-${String(n).padStart(6, "0")}`;
 }
 
 // FEE-001: Splits a line total into installments based on installmentPlan or

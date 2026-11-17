@@ -1080,9 +1080,10 @@ model FeeStructure {
   gradeLevelId   String?
   academicYearId String?
   name           String
-  active         Boolean  @default(true)
-  effectiveFrom  DateTime @default(now())
-  createdAt      DateTime @default(now())
+  active         Boolean   @default(true)
+  effectiveFrom  DateTime  @default(now())
+  effectiveTo    DateTime?
+  createdAt      DateTime  @default(now())
 
   campus      Campus                 @relation(fields: [campusId], references: [id], onDelete: Cascade)
   gradeLevel  GradeLevel?            @relation(fields: [gradeLevelId], references: [id])

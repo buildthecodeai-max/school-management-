@@ -1,0 +1,35 @@
+import { prisma } from "@/lib/db";
+import { canForCampus, requirePermission } from "@/lib/rbac";
+import { formatMoney } from "@/lib/money";
+import { createFinanceCategory, createFinancialAccount, createFinancialFund, recordFinanceTransaction } from "./actions";
+
+const input = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm";
+
+async function submitAccount(form: FormData) { "use server"; await createFinancialAccount({}, form); }
+async function submitCategory(form: FormData) { "use server"; await createFinanceCategory({}, form); }
+async function submitFund(form: FormData) { "use server"; await createFinancialFund({}, form); }
+async function submitTransaction(form: FormData) { "use server"; await recordFinanceTransaction({}, form); }
+
+export default async function FinancePage({ searchParams }: { searchParams: Promise<{ campusId?: string }> }) {
+  const ctx = await requirePermission("finance.read"); const { campusId: requested } = await searchParams;
+  const campuses = await prisma.campus.findMany({ where: { tenantId: ctx.tenantId!, status: "ACTIVE" }, orderBy: { name: "asc" } });
+  const campusId = requested && canForCampus(ctx, "finance.read", requested) ? requested : campuses.find(c => canForCampus(ctx, "finance.read", c.id))?.id;
+  if (!campusId) return <main className="p-6">No campus is available in your finance scope.</main>;
+  const [accounts, categories, funds, transactions] = await Promise.all([
+    prisma.financialAccount.findMany({ where: { tenantId: ctx.tenantId!, campusId }, orderBy: { name: "asc" } }),
+    prisma.financeCategory.findMany({ where: { tenantId: ctx.tenantId!, campusId, active: true }, orderBy: [{ kind: "asc" }, { name: "asc" }] }),
+    prisma.financialFund.findMany({ where: { tenantId: ctx.tenantId!, active: true }, orderBy: { name: "asc" } }),
+    prisma.financeTransaction.findMany({ where: { tenantId: ctx.tenantId!, campusId }, include: { account: true, category: true, fund: true }, orderBy: { occurredAt: "desc" }, take: 100 }),
+  ]);
+  const accountBalance = (id: string, opening: number) => opening + transactions.filter(t => t.accountId === id).reduce((sum, t) => sum + (t.type === "INCOME" || t.type === "TRANSFER_IN" ? t.amount : -t.amount), 0);
+  const fundBalance = (id: string) => transactions.filter(t => t.fundId === id).reduce((sum, t) => sum + (t.type === "INCOME" ? t.amount : -t.amount), 0);
+  return <main className="space-y-6 p-6"><div><h1 className="text-2xl font-bold">Operational Finance</h1><p className="text-sm text-slate-600">Append-only income, expense and fund ledger.</p></div>
+    <div className="flex gap-2 flex-wrap">{campuses.map(c => <a key={c.id} href={`?campusId=${c.id}`} className={`rounded-full border px-3 py-1 text-sm ${c.id === campusId ? "bg-indigo-600 text-white" : ""}`}>{c.name}</a>)}</div>
+    <section className="grid gap-4 lg:grid-cols-3"><form action={submitAccount} className="space-y-2 rounded border p-4"><h2 className="font-semibold">New account</h2><input type="hidden" name="campusId" value={campusId}/><input name="name" required placeholder="Main Bank" className={input}/><input name="code" required placeholder="MAIN-BANK" className={input}/><select name="type" className={input}><option value="BANK">Bank</option><option value="CASH">Cash</option><option value="PETTY_CASH">Petty cash</option><option value="GATEWAY">Online gateway</option></select><input name="openingBalance" type="number" min="0" step="0.01" placeholder="Opening balance" className={input}/><button className="rounded bg-indigo-600 px-3 py-2 text-sm text-white">Create account</button></form>
+    <form action={submitCategory} className="space-y-2 rounded border p-4"><h2 className="font-semibold">New category</h2><input type="hidden" name="campusId" value={campusId}/><input name="name" required placeholder="Electricity" className={input}/><select name="kind" className={input}><option value="EXPENSE">Expense</option><option value="INCOME">Income</option></select><button className="rounded bg-indigo-600 px-3 py-2 text-sm text-white">Create category</button></form>
+    {ctx.hasOrgScope && <form action={submitFund} className="space-y-2 rounded border p-4"><h2 className="font-semibold">Designated fund</h2><input name="name" required placeholder="Sports Fund" className={input}/><input name="code" required placeholder="SPORTS" className={input}/><button className="rounded bg-indigo-600 px-3 py-2 text-sm text-white">Create fund</button></form>}</section>
+    <form action={submitTransaction} className="grid gap-3 rounded border p-4 md:grid-cols-4"><h2 className="font-semibold md:col-span-4">Record income or expense</h2><input type="hidden" name="campusId" value={campusId}/><select name="type" className={input}><option value="INCOME">Income</option><option value="EXPENSE">Expense</option></select><select name="accountId" required className={input}><option value="">Account</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select><select name="categoryId" className={input}><option value="">No category</option>{categories.map(c => <option key={c.id} value={c.id}>{c.kind}: {c.name}</option>)}</select><select name="fundId" className={input}><option value="">No designated fund</option>{funds.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select><input name="amount" required type="number" min="0.01" step="0.01" placeholder="Amount" className={input}/><input name="description" required placeholder="Description" className={input}/><input name="reference" placeholder="Reference" className={input}/><button className="rounded bg-indigo-600 px-3 py-2 text-sm text-white">Post transaction</button></form>
+    <section className="grid gap-4 md:grid-cols-2"><div className="rounded border p-4"><h2 className="font-semibold">Account balances</h2>{accounts.map(a => <div className="flex justify-between border-b py-2" key={a.id}><span>{a.name} <span className="text-xs text-slate-500">{a.type}</span></span><b>{formatMoney(accountBalance(a.id, a.openingBalance))}</b></div>)}</div><div className="rounded border p-4"><h2 className="font-semibold">Fund collection vs utilization</h2>{funds.map(f => <div className="flex justify-between border-b py-2" key={f.id}><span>{f.name}</span><b>{formatMoney(fundBalance(f.id))}</b></div>)}</div></section>
+    <section className="overflow-x-auto rounded border"><table className="min-w-full text-sm"><thead className="bg-slate-50 text-left"><tr><th className="p-2">Date</th><th className="p-2">Type</th><th className="p-2">Description</th><th className="p-2">Account</th><th className="p-2">Fund</th><th className="p-2 text-right">Amount</th></tr></thead><tbody>{transactions.map(t => <tr className="border-t" key={t.id}><td className="p-2">{t.occurredAt.toLocaleDateString()}</td><td className="p-2">{t.type}</td><td className="p-2">{t.description}</td><td className="p-2">{t.account.name}</td><td className="p-2">{t.fund?.name ?? "—"}</td><td className={`p-2 text-right ${t.type === "EXPENSE" ? "text-red-700" : "text-green-700"}`}>{t.type === "EXPENSE" ? "−" : "+"}{formatMoney(t.amount)}</td></tr>)}</tbody></table></section>
+  </main>;
+}

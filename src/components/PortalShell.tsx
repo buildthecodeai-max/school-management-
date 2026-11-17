@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { leaveOrganization } from "@/app/portal/platform/context-actions";
 import { prisma } from "@/lib/db";
 import { preferredCampusId } from "@/lib/campus-preference";
 import { CampusSwitcher } from "./CampusSwitcher";
+import { BreachWarningBanner } from "./BreachWarningBanner";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import {
@@ -251,6 +253,8 @@ export async function PortalShell({
       })
     : [];
   const activeCampusId = await preferredCampusId(ctx, "campus.read");
+  const jar = await cookies();
+  const showBreachWarning = jar.get("sms_pwd_breach")?.value === "1";
 
   return (
     <div className="flex min-h-screen">
@@ -356,6 +360,8 @@ export async function PortalShell({
             </form>
           </div>
         )}
+
+        {showBreachWarning && <BreachWarningBanner />}
 
         {ctx.isSuspended && (
           <div className="bg-red-600 px-6 py-2 text-center text-sm font-medium text-white">

@@ -7,11 +7,12 @@ Per PRD Appendix A, a requirement is "complete" only with acceptance evidence
 attached and approved. The ✅ marks below mean *implemented and manually
 exercised*, not formally accepted.
 
-Last updated: Phase 9 complete. All non-deferred requirements implemented.
+Last updated: Phase 10 complete. All non-deferred requirements implemented.
 New in phase 6: ADM-006 (student lifecycle UI), SIS-004/005, EXM-002/005, FEE-003/005/007, INV-po/asset, TRP-notify.
 New in phase 7: LIB-reserve (reserve/fulfill/cancel), FEE-007 download Route Handler (`api/portal/fees/gl-export`), EXM-002 scheduling UI (`portal/exams/schedule/new`), CFG-002 campus template clone with preview (`portal/setup/clone-actions.ts`), BRN-006 confirmed ✅.
 New in phase 8: NTF-002 template management UI (`portal/notifications/templates`); UX-003 search page already wired; UX-006 campus preference wired into library/HR/transport/inventory/health/safeguarding pages via `resolveCampusId()`.
 New in phase 9: TEN-006 tenant offboarding — data export Route Handler (`api/portal/platform/tenants/[id]/export`), deletion scheduling with evidence gate (`dataExportedAt` required), cancel and hard-delete flows in `OffboardingPanel`.
+New in phase 10: SEC-003 HaveIBeenPwned k-Anonymity breach check (`lib/hibp.ts`) runs at login; sets `sms_pwd_breach` cookie; amber warning banner in portal with dismiss; change-password page at `portal/account/password`.
 
 ## §5 Tenancy (TEN)
 | ID | Requirement | Status | Where |
@@ -176,7 +177,7 @@ Safeguarding. Dedicated `safeguardingOfficerRole` seeded for demo.
 | --- | --- | --- | --- |
 | §14.1 | Tenant keys, effective dating, append-only audit | ✅ | `schema.prisma` |
 | SEC-002 | MFA for privileged roles | ✅ | TOTP MFA via `@otplib/preset-default`; `User.mfaSecret` (pending: prefix until verified); enroll/verify/disable flow at `/portal/settings/security`; `MfaSetup` client component with QR code |
-| SEC-003 | Password policy, session expiry, login rate limiting | ✅ | bcrypt + session expiry ✅; `lib/login-rate-limit.ts` (10 attempts / 15 min per email+IP, in-memory) ✅; HaveIBeenPwned breach check ⬜ (external network dependency) |
+| SEC-003 | Password policy, session expiry, login rate limiting | ✅ | bcrypt + session expiry ✅; `lib/login-rate-limit.ts` (10 attempts / 15 min per email+IP, in-memory) ✅; HaveIBeenPwned k-Anonymity breach check on login (`lib/hibp.ts`) + amber warning banner in portal + change-password page (`portal/account/password`) ✅ |
 | SEC-005 | Immutable audit trails | ✅ | `AuditEvent`, `lib/audit.ts` |
 
 ## §15 APIs

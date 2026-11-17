@@ -1,12 +1,15 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createSession, verifyPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { checkLoginRateLimit, resetLoginRateLimit } from "@/lib/login-rate-limit";
+import { pwnedPasswordCount } from "@/lib/hibp";
+
+const PWD_BREACH_COOKIE = "sms_pwd_breach";
 
 // SEC-003: password must be ≥8 chars, at least 1 uppercase, 1 digit.
 const schema = z.object({
@@ -76,7 +79,12 @@ export async function loginAction(
   // Successful login clears the rate-limit counter.
   resetLoginRateLimit(rateLimitKey);
 
-  await createSession(user.id);
+  // SEC-003: check HIBP k-Anonymity API in parallel with session creation.
+  const [, breachCount] = await Promise.all([
+    createSession(user.id),
+    pwnedPasswordCount(password),
+  ]);
+
   await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
@@ -86,7 +94,19 @@ export async function loginAction(
     actorUserId: user.id,
     action: "auth.login",
     outcome: "SUCCESS",
+    metadata: breachCount > 0 ? { breachedPassword: true, breachCount } : undefined,
   });
+
+  if (breachCount > 0) {
+    const jar = await cookies();
+    jar.set(PWD_BREACH_COOKIE, "1", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30, // 30 days — persist until dismissed or changed
+    });
+  }
 
   redirect("/portal");
 }

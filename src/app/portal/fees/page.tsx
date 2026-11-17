@@ -61,6 +61,9 @@ export default async function FeesDashboardPage() {
         subtitle="Billing, collections and outstanding balances."
         action={
           <div className="flex gap-2">
+            <ButtonLink href="/portal/fees/reports" variant="ghost">
+              Reports
+            </ButtonLink>
             <ButtonLink href="/portal/fees/structures" variant="ghost">
               Fee structures
             </ButtonLink>

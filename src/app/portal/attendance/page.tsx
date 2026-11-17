@@ -3,7 +3,7 @@ import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { allowedCampusIds } from "@/lib/scope";
 import { dayStart, dayEnd } from "@/lib/dates";
-import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
+import { PageHeader, Card, Badge, EmptyState, ButtonLink } from "@/components/ui";
 
 export default async function AttendanceListPage() {
   const ctx = await requirePermission("attendance.read");
@@ -31,6 +31,11 @@ export default async function AttendanceListPage() {
       <PageHeader
         title="Attendance"
         subtitle={`Take and review today's registers · ${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`}
+        action={
+          <ButtonLink href="/portal/attendance/analytics" variant="ghost">
+            Analytics
+          </ButtonLink>
+        }
       />
 
       {sections.length === 0 ? (

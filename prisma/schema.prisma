@@ -358,6 +358,7 @@ model Student {
   feeAssignments     StudentFeeAssignment[]
   invoices           Invoice[]
   payments           Payment[]
+  paymentPlans       PaymentPlan[]
   markEntries        MarkEntry[]
   results            StudentResult[]
   documents          StudentDocument[]
@@ -401,6 +402,7 @@ model Staff {
   person               Person              @relation(fields: [personId], references: [id], onDelete: Cascade)
   homeroomSections     Section[]
   attendanceSessions   AttendanceSession[]
+  staffAttendanceRecords StaffAttendanceRecord[]
   timetableSlots       TimetableSlot[]
   leaveRequests        LeaveRequest[]
   examInvigilations    ExamInvigilator[]
@@ -421,6 +423,29 @@ model Staff {
   @@unique([tenantId, employeeNumber])
   @@index([tenantId])
   @@map("staff")
+}
+
+// Daily staff attendance record (C.5 — ATT-001)
+model StaffAttendanceRecord {
+  id               String   @id @default(cuid())
+  tenantId         String
+  campusId         String
+  staffId          String
+  date             DateTime
+  status           String   // PRESENT | ABSENT | LATE | HALF_DAY | LEAVE
+  checkInTime      String?  // HH:MM
+  checkOutTime     String?
+  note             String?
+  recordedByUserId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, date])
+  @@index([tenantId])
+  @@index([campusId])
+  @@map("staff_attendance_records")
 }
 
 enum RelationshipType {
@@ -1264,6 +1289,44 @@ model BillingRun {
 
   @@index([tenantId])
   @@map("billing_runs")
+}
+
+// Payment plan — breaks an outstanding invoice into tracked installments (C.8)
+model PaymentPlan {
+  id              String   @id @default(cuid())
+  tenantId        String
+  studentId       String
+  campusId        String
+  invoiceId       String
+  totalAmount     Int
+  paidAmount      Int      @default(0)
+  status          String   @default("ACTIVE")  // ACTIVE | COMPLETED | CANCELLED
+  note            String?
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  student      Student                  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  installments PaymentPlanInstallment[]
+
+  @@index([tenantId])
+  @@index([studentId])
+  @@index([invoiceId])
+  @@map("payment_plans")
+}
+
+model PaymentPlanInstallment {
+  id         String   @id @default(cuid())
+  tenantId   String
+  planId     String
+  dueDate    DateTime
+  amount     Int
+  paidAmount Int      @default(0)
+  status     String   @default("PENDING") // PENDING | PAID | OVERDUE
+
+  plan PaymentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("payment_plan_installments")
 }
 
 // ---------------------------------------------------------------------------

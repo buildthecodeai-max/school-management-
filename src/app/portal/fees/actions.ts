@@ -446,6 +446,119 @@ export async function addCreditNote(formData: FormData) {
   revalidatePath(`/portal/fees/invoices/${invoiceId}`);
 }
 
+// Write off the full remaining balance of an invoice (C.8).
+export async function writeOffBalance(formData: FormData) {
+  const ctx = await requireUser();
+  const invoiceId = String(formData.get("invoiceId"));
+  const reason = String(formData.get("reason") || "Bad debt write-off").trim();
+  if (!reason) throw new Error("A reason is required for a write-off.");
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, tenantId: ctx.tenantId! },
+  });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!canForCampus(ctx, "fee.adjust", invoice.campusId))
+    throw new Error("Write-offs require fee.adjust permission.");
+  if (invoice.balance <= 0) throw new Error("Invoice balance is already zero.");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.creditNote.create({
+      data: {
+        tenantId: ctx.tenantId!,
+        invoiceId,
+        amount: invoice.balance,
+        reason,
+        approvedByUserId: ctx.user.id,
+      },
+    });
+    await recomputeInvoice(tx, invoiceId);
+  });
+
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: "fee.writeoff",
+    targetType: "Invoice",
+    targetId: invoiceId,
+    campusId: invoice.campusId,
+    scopeType: "CAMPUS",
+    metadata: { amount: invoice.balance, reason },
+  });
+
+  revalidatePath(`/portal/fees/invoices/${invoiceId}`);
+  revalidatePath("/portal/fees");
+}
+
+// Create a payment plan for an invoice's outstanding balance (C.8).
+export async function createPaymentPlan(formData: FormData) {
+  const ctx = await requireUser();
+  const invoiceId = String(formData.get("invoiceId"));
+  const installmentsRaw = Number(formData.get("installments") ?? 2);
+  const note = String(formData.get("note") || "").trim();
+
+  if (!Number.isInteger(installmentsRaw) || installmentsRaw < 2 || installmentsRaw > 24)
+    throw new Error("Installments must be between 2 and 24.");
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, tenantId: ctx.tenantId! },
+  });
+  if (!invoice) throw new Error("Invoice not found");
+  if (!canForCampus(ctx, "fee.collect", invoice.campusId))
+    throw new Error("You need fee.collect permission to create a payment plan.");
+  if (invoice.balance <= 0) throw new Error("Invoice has no outstanding balance.");
+
+  // Check no active plan already exists for this invoice
+  const existing = await prisma.paymentPlan.findFirst({
+    where: { invoiceId, tenantId: ctx.tenantId!, status: "ACTIVE" },
+  });
+  if (existing) throw new Error("An active payment plan already exists for this invoice.");
+
+  const installmentAmount = Math.floor(invoice.balance / installmentsRaw);
+  const remainder = invoice.balance - installmentAmount * installmentsRaw;
+  const baseDate = invoice.dueDate > new Date() ? invoice.dueDate : new Date();
+
+  await prisma.$transaction(async (tx) => {
+    const plan = await tx.paymentPlan.create({
+      data: {
+        tenantId: ctx.tenantId!,
+        studentId: invoice.studentId,
+        campusId: invoice.campusId,
+        invoiceId,
+        totalAmount: invoice.balance,
+        note: note || null,
+        createdByUserId: ctx.user.id,
+      },
+    });
+
+    for (let i = 0; i < installmentsRaw; i++) {
+      const dueDate = new Date(baseDate);
+      dueDate.setMonth(dueDate.getMonth() + i);
+      const amount = i === 0 ? installmentAmount + remainder : installmentAmount;
+      await tx.paymentPlanInstallment.create({
+        data: {
+          tenantId: ctx.tenantId!,
+          planId: plan.id,
+          dueDate,
+          amount,
+        },
+      });
+    }
+  });
+
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: "fee.paymentplan.created",
+    targetType: "Invoice",
+    targetId: invoiceId,
+    campusId: invoice.campusId,
+    scopeType: "CAMPUS",
+    metadata: { installments: installmentsRaw, totalAmount: invoice.balance },
+  });
+
+  revalidatePath(`/portal/fees/invoices/${invoiceId}`);
+}
+
 // IAM-003: issueRefund now routes through maker-checker.
 // The submitter creates an ApprovalRequest; a separate approveRefund action
 // executes the actual Refund row once approved.

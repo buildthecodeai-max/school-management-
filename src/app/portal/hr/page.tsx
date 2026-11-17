@@ -72,7 +72,10 @@ export default async function HrPage({
     <main className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Human Resources</h1>
-        <Link href="/portal/hr/payroll" className="rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-700">Payroll →</Link>
+        <div className="flex gap-2">
+          <Link href="/portal/hr/attendance" className="rounded border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">Staff attendance →</Link>
+          <Link href="/portal/hr/payroll" className="rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-700">Payroll →</Link>
+        </div>
       </div>
 
       {/* Campus tabs */}

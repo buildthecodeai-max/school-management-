@@ -5,7 +5,7 @@ import { allowedCampusIds } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { PageHeader, Card, Badge, StatCard } from "@/components/ui";
-import { recordPayment, addCreditNote } from "../../actions";
+import { recordPayment, addCreditNote, writeOffBalance, createPaymentPlan } from "../../actions";
 
 export default async function InvoiceDetailPage({
   params,
@@ -188,6 +188,49 @@ export default async function InvoiceDetailPage({
                   Credit notes and refunds require approval rights (separation of duties). Ask a campus administrator.
                 </p>
               )}
+            </Card>
+          )}
+
+          {invoice.balance > 0 && canAdjust && (
+            <Card>
+              <h3 className="mb-3 font-semibold">Write off balance</h3>
+              <form action={writeOffBalance} className="space-y-3">
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <div>
+                  <label className={labelCls}>Reason (required)</label>
+                  <input name="reason" required className={input} placeholder="e.g. bad debt — unable to collect" />
+                </div>
+                <p className="text-xs text-[color:var(--color-muted)]">
+                  This will create a credit note for the full balance of {formatMoney(invoice.balance)} and mark the invoice as paid. This action cannot be undone.
+                </p>
+                <button className="w-full rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                  Write off {formatMoney(invoice.balance)}
+                </button>
+              </form>
+            </Card>
+          )}
+
+          {invoice.balance > 0 && canCollect && (
+            <Card>
+              <h3 className="mb-3 font-semibold">Payment plan</h3>
+              <form action={createPaymentPlan} className="space-y-3">
+                <input type="hidden" name="invoiceId" value={invoice.id} />
+                <div>
+                  <label className={labelCls}>Number of installments</label>
+                  <select name="installments" className={input} defaultValue="3">
+                    {[2, 3, 4, 6, 9, 12].map((n) => (
+                      <option key={n} value={n}>{n} installments ({formatMoney(Math.round(invoice.balance / n))} each)</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Note (optional)</label>
+                  <input name="note" className={input} placeholder="e.g. agreed with parent on call" />
+                </div>
+                <button className="w-full rounded-lg bg-white px-4 py-2 text-sm font-medium ring-1 ring-inset ring-[color:var(--color-line)] hover:bg-slate-50">
+                  Create payment plan
+                </button>
+              </form>
             </Card>
           )}
         </div>

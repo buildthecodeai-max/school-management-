@@ -7,10 +7,11 @@ Per PRD Appendix A, a requirement is "complete" only with acceptance evidence
 attached and approved. The ✅ marks below mean *implemented and manually
 exercised*, not formally accepted.
 
-Last updated: Phase 8 complete.
+Last updated: Phase 9 complete. All non-deferred requirements implemented.
 New in phase 6: ADM-006 (student lifecycle UI), SIS-004/005, EXM-002/005, FEE-003/005/007, INV-po/asset, TRP-notify.
 New in phase 7: LIB-reserve (reserve/fulfill/cancel), FEE-007 download Route Handler (`api/portal/fees/gl-export`), EXM-002 scheduling UI (`portal/exams/schedule/new`), CFG-002 campus template clone with preview (`portal/setup/clone-actions.ts`), BRN-006 confirmed ✅.
 New in phase 8: NTF-002 template management UI (`portal/notifications/templates`); UX-003 search page already wired; UX-006 campus preference wired into library/HR/transport/inventory/health/safeguarding pages via `resolveCampusId()`.
+New in phase 9: TEN-006 tenant offboarding — data export Route Handler (`api/portal/platform/tenants/[id]/export`), deletion scheduling with evidence gate (`dataExportedAt` required), cancel and hard-delete flows in `OffboardingPanel`.
 
 ## §5 Tenancy (TEN)
 | ID | Requirement | Status | Where |
@@ -20,7 +21,7 @@ New in phase 8: NTF-002 template management UI (`portal/notifications/templates`
 | TEN-003 | Org settings with campus overrides | ✅ | `CampusSetting` model; `CAMPUS_SETTING_KEYS` (10 configurable keys); `saveCampusSetting`/`getCampusSettings` in `settings/campus/actions.ts`; settings editor UI at `/portal/settings/campus` |
 | TEN-004 | Idempotent tenant provisioning | ✅ | Provisioning wizard at `/portal/platform/tenants/new`; slug-based idempotent upsert — re-submitting same slug updates name without creating duplicates; admin user + role assignment provisioned in one pass |
 | TEN-005 | Suspension blocks use, preserves data | ✅ | `blockedBySuspension()` in `requireUser()` — single choke point; all writes/server actions blocked for suspended tenants; platform staff exempt; banner shown; data preserved |
-| TEN-006 | Offboarding: export, hold, deletion evidence | ⬜ | |
+| TEN-006 | Offboarding: export, hold, deletion evidence | ✅ | `api/portal/platform/tenants/[id]/export` (JSON download); `Tenant.dataExportedAt/deletionScheduledAt`; `scheduleTenantDeletion`/`cancelTenantDeletion` actions; `OffboardingPanel` three-step UI |
 
 ## §6 Access control (IAM)
 | ID | Requirement | Status | Where |

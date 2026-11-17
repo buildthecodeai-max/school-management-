@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { updateTenant, deleteTenant, type TenantActionState } from "../../actions";
+import { updateTenant, deleteTenant, scheduleTenantDeletion, cancelTenantDeletion, type TenantActionState } from "../../actions";
 
 const inputCls =
   "w-full rounded-md border border-[color:var(--color-line)] bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
@@ -72,6 +72,91 @@ export function EditTenantForm({
         {pending ? "Saving…" : "Save changes"}
       </button>
     </form>
+  );
+}
+
+// TEN-006 — Offboarding panel: export evidence + deletion schedule + hard delete.
+export function OffboardingPanel({
+  tenantId,
+  slug,
+  status,
+  campusCount,
+  userCount,
+  dataExportedAt,
+  deletionScheduledAt,
+}: {
+  tenantId: string;
+  slug: string;
+  status: string;
+  campusCount: number;
+  userCount: number;
+  dataExportedAt: Date | null;
+  deletionScheduledAt: Date | null;
+}) {
+  const [schedState, schedAction, scheduling] = useActionState<TenantActionState, FormData>(scheduleTenantDeletion, {});
+  const [cancelState, cancelAction, cancelling] = useActionState<TenantActionState, FormData>(cancelTenantDeletion, {});
+  const scheduledInPast = deletionScheduledAt && deletionScheduledAt <= new Date();
+
+  return (
+    <div className="space-y-4">
+      {/* Export */}
+      <div className="rounded-lg border p-4">
+        <h4 className="font-semibold text-sm">1 — Export data</h4>
+        <p className="mt-1 text-sm text-[color:var(--color-muted)]">Download all tenant data as JSON for GDPR / data-portability compliance. Required before scheduling deletion.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <a
+            href={`/api/portal/platform/tenants/${tenantId}/export`}
+            download
+            className="rounded-md border border-[color:var(--color-line)] bg-white px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50"
+          >
+            Download tenant data
+          </a>
+          {dataExportedAt && (
+            <span className="text-sm text-green-700">Last exported {dataExportedAt.toLocaleDateString()}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Schedule deletion */}
+      <div className="rounded-lg border p-4">
+        <h4 className="font-semibold text-sm">2 — Schedule deletion</h4>
+        <p className="mt-1 text-sm text-[color:var(--color-muted)]">Set a grace period before permanent deletion. The tenant stays CLOSED during this time and can still be restored.</p>
+        {status !== "CLOSED" && (
+          <p className="mt-2 text-sm text-amber-700">Set status to Closed above first.</p>
+        )}
+        {status === "CLOSED" && !deletionScheduledAt && (
+          <form action={schedAction} className="mt-3 flex flex-wrap items-end gap-3">
+            <input type="hidden" name="tenantId" value={tenantId} />
+            <div>
+              <label className={labelCls}>Grace period (days)</label>
+              <input name="graceDays" type="number" min="1" max="90" defaultValue="30"
+                className={`${inputCls} w-28`} />
+            </div>
+            <button disabled={scheduling} className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+              {scheduling ? "Scheduling…" : "Schedule deletion"}
+            </button>
+          </form>
+        )}
+        {schedState.error && <p className="mt-2 text-sm text-red-600">{schedState.error}</p>}
+        {schedState.message && <p className="mt-2 text-sm text-green-700">{schedState.message}</p>}
+        {deletionScheduledAt && !scheduledInPast && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-amber-700">Deletion scheduled for {deletionScheduledAt.toLocaleDateString()}</span>
+            <form action={cancelAction}>
+              <input type="hidden" name="tenantId" value={tenantId} />
+              <button disabled={cancelling} className="text-sm text-brand-700 underline">{cancelling ? "Cancelling…" : "Cancel"}</button>
+            </form>
+            {cancelState.message && <span className="text-sm text-green-700">{cancelState.message}</span>}
+          </div>
+        )}
+        {scheduledInPast && (
+          <p className="mt-2 text-sm font-medium text-red-700">Grace period elapsed — ready for hard deletion below.</p>
+        )}
+      </div>
+
+      {/* Hard delete */}
+      <DeleteTenantPanel tenantId={tenantId} slug={slug} status={status} campusCount={campusCount} userCount={userCount} />
+    </div>
   );
 }
 

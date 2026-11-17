@@ -4,7 +4,7 @@ import { requireUser, can } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { startImpersonationAction, ensureSchoolRoles } from "../../actions";
-import { EditTenantForm, DeleteTenantPanel } from "./TenantAdmin";
+import { EditTenantForm, OffboardingPanel } from "./TenantAdmin";
 import { SubscriptionPanel, UserRowActions } from "./SubscriptionPanel";
 import { PlatformCampusForm } from "./PlatformCampusForm";
 import { ManageBar } from "./ManageBar";
@@ -251,12 +251,15 @@ export default async function TenantDetailPage({
             />
           )}
           <div id="danger-zone" className="scroll-mt-6">
-            <DeleteTenantPanel
+            <h3 className="mb-3 font-semibold">Offboarding</h3>
+            <OffboardingPanel
               tenantId={tenant.id}
               slug={tenant.slug}
               status={tenant.status}
               campusCount={counts.campuses}
               userCount={counts.users}
+              dataExportedAt={tenant.dataExportedAt}
+              deletionScheduledAt={tenant.deletionScheduledAt}
             />
           </div>
         </div>

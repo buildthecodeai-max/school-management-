@@ -880,3 +880,73 @@ export async function startImpersonationAction(formData: FormData) {
 
   redirect("/portal");
 }
+
+// TEN-006: Schedule a tenant for deletion with a mandatory grace period.
+// Requires: tenant is CLOSED, data has been exported, and platform.manage.
+export async function scheduleTenantDeletion(
+  _prev: TenantActionState,
+  formData: FormData,
+): Promise<TenantActionState> {
+  const ctx = await requireUser();
+  assertPermission(ctx, "platform.manage");
+
+  const tenantId = String(formData.get("tenantId") ?? "").trim();
+  const graceDays = Math.max(1, Math.min(90, Number(formData.get("graceDays") ?? "30")));
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return { error: "Tenant not found." };
+  if (tenant.status !== "CLOSED") return { error: "Tenant must be CLOSED before scheduling deletion." };
+  if (!tenant.dataExportedAt) return { error: "Export the tenant data before scheduling deletion." };
+  if (tenant.deletionScheduledAt) return { error: "Deletion is already scheduled." };
+
+  const scheduledAt = new Date();
+  scheduledAt.setDate(scheduledAt.getDate() + graceDays);
+
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { deletionScheduledAt: scheduledAt, deletionScheduledById: ctx.user.id },
+  });
+
+  await audit({
+    tenantId: null,
+    actorUserId: ctx.user.id,
+    action: "platform.tenant.deletion_scheduled",
+    targetType: "Tenant",
+    targetId: tenantId,
+    scopeType: "PLATFORM",
+    metadata: { name: tenant.name, scheduledAt: scheduledAt.toISOString(), graceDays },
+  });
+
+  return { message: `Deletion scheduled for ${scheduledAt.toLocaleDateString()}. The tenant can still be restored before that date.` };
+}
+
+// TEN-006: Cancel a scheduled deletion (re-opens the tenant to CLOSED state).
+export async function cancelTenantDeletion(
+  _prev: TenantActionState,
+  formData: FormData,
+): Promise<TenantActionState> {
+  const ctx = await requireUser();
+  assertPermission(ctx, "platform.manage");
+
+  const tenantId = String(formData.get("tenantId") ?? "").trim();
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return { error: "Tenant not found." };
+  if (!tenant.deletionScheduledAt) return { error: "No deletion is scheduled." };
+
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { deletionScheduledAt: null, deletionScheduledById: null },
+  });
+
+  await audit({
+    tenantId: null,
+    actorUserId: ctx.user.id,
+    action: "platform.tenant.deletion_cancelled",
+    targetType: "Tenant",
+    targetId: tenantId,
+    scopeType: "PLATFORM",
+    metadata: { name: tenant.name },
+  });
+
+  return { message: "Scheduled deletion cancelled. The tenant remains CLOSED." };
+}

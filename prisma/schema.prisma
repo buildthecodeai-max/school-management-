@@ -33,6 +33,10 @@ model Tenant {
   logoUrl      String?
   locale       String       @default("en")
   timezone     String       @default("UTC")
+  // TEN-006: offboarding evidence fields
+  dataExportedAt        DateTime?
+  deletionScheduledAt   DateTime?
+  deletionScheduledById String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 

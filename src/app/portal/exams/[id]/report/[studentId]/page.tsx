@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser, canForCampus } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { Card, Badge } from "@/components/ui";
+import { PrintButton } from "@/components/PrintButton";
 
 // Authorize: staff with exams.read on the campus, the student themselves, or a
 // guardian linked to the student.
@@ -59,10 +60,11 @@ export default async function ReportCardPage({
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between print:hidden">
         <Link href={`/portal/exams/${id}`} className="text-sm text-brand-700 hover:underline">
           ← Plan
         </Link>
+        {version && result && <PrintButton />}
       </div>
 
       {!version || !result ? (

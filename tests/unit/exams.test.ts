@@ -126,6 +126,13 @@ describe("computeResults — ranking and promotion", () => {
     expect(byId.s1.rank).toBe(3);
   });
 
+  it("gives tied students the same rank and skips the next (1, 2, 2, 4)", () => {
+    const marksBy = marksMap([["a", 90], ["b", 70], ["c", 70], ["d", 50]]);
+    const results = computeResults({ bands: BANDS, components: COMPONENTS, subjects, students: ["a", "b", "c", "d"], marksBy });
+    const rank = Object.fromEntries(results.map((r) => [r.studentId, r.rank]));
+    expect(rank).toEqual({ a: 1, b: 2, c: 2, d: 4 });
+  });
+
   it("marks a student below the lowest passing band as not passed", () => {
     const marksBy = marksMap([["s1", 20]]); // below D's 40% floor -> F
     const [result] = computeResults({
@@ -161,5 +168,19 @@ describe("computeResults — ranking and promotion", () => {
     const run1 = computeResults(input);
     const run2 = computeResults(input);
     expect(run1).toEqual(run2);
+  });
+});
+
+import { canTransition } from "@/lib/exams";
+describe("plan status transitions", () => {
+  it("only allows the review workflow, never a direct jump to PUBLISHED", () => {
+    expect(canTransition("OPEN", "SUBMITTED")).toBe(true);
+    expect(canTransition("OPEN", "APPROVED")).toBe(false);
+    expect(canTransition("OPEN", "PUBLISHED")).toBe(false);
+    expect(canTransition("SUBMITTED", "APPROVED")).toBe(true);
+    expect(canTransition("APPROVED", "PUBLISHED")).toBe(false);
+    expect(canTransition("PUBLISHED", "OPEN")).toBe(true);
+    expect(canTransition("PUBLISHED", "SUBMITTED")).toBe(false);
+    expect(canTransition("OPEN", "BOGUS")).toBe(false);
   });
 });

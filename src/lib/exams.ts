@@ -89,8 +89,27 @@ export function computeResults(input: {
     };
   });
 
+  // Standard competition ranking: equal percentages share a rank and the next
+  // rank skips (1, 2, 2, 4).
   const ranked = [...results].sort((a, b) => b.overallPercent - a.overallPercent);
   const rankOf = new Map<string, number>();
-  ranked.forEach((r, i) => rankOf.set(r.studentId, i + 1));
+  ranked.forEach((r, i) => {
+    const prev = ranked[i - 1];
+    rankOf.set(r.studentId, prev && prev.overallPercent === r.overallPercent ? rankOf.get(prev.studentId)! : i + 1);
+  });
   return results.map((r) => ({ ...r, rank: rankOf.get(r.studentId)! }));
+}
+
+export type PlanStatus = "OPEN" | "SUBMITTED" | "APPROVED" | "PUBLISHED";
+
+// Allowed manual transitions. PUBLISHED is only ever reached by publishing
+// (which computes and freezes a result version), never by setting a status.
+export const PLAN_TRANSITIONS: Record<PlanStatus, PlanStatus[]> = {
+  OPEN: ["SUBMITTED"],
+  SUBMITTED: ["APPROVED", "OPEN"],
+  APPROVED: ["OPEN"],
+  PUBLISHED: ["OPEN"],
+};
+export function canTransition(from: PlanStatus, to: string): to is PlanStatus {
+  return (PLAN_TRANSITIONS[from] as string[]).includes(to);
 }

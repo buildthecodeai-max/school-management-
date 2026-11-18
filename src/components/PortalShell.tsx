@@ -264,7 +264,7 @@ export async function PortalShell({
   return (
     <div className="flex min-h-screen" dir={textDirection(locale)} lang={locale}>
       {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-[color:var(--color-line)] bg-white md:flex">
+      <aside className="hidden print:hidden w-64 shrink-0 flex-col border-r border-[color:var(--color-line)] bg-white md:flex">
         <div className="flex h-16 items-center gap-2 border-b border-[color:var(--color-line)] px-5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
             <BookOpen size={18} />
@@ -299,7 +299,7 @@ export async function PortalShell({
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Topbar */}
-        <header className="flex h-16 items-center justify-between border-b border-[color:var(--color-line)] bg-white px-6">
+        <header className="flex print:hidden h-16 items-center justify-between border-b border-[color:var(--color-line)] bg-white px-6">
           <div className="flex min-w-0 items-center gap-3 text-sm">
             <Building2 size={16} className="shrink-0 text-brand-600" />
             <span className="truncate font-medium">{contextLabel}</span>
@@ -378,7 +378,7 @@ export async function PortalShell({
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">{children}</main>
       </div>
     </div>
   );

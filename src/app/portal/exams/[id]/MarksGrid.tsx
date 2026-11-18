@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { saveMarks } from "../actions";
+import { useState, useActionState } from "react";
+import { saveMarks, type ExamActionState } from "../actions";
 
 interface Subject {
   id: string;
@@ -41,6 +41,7 @@ export function MarksGrid({
 }) {
   const [activeSubject, setActiveSubject] = useState(subjects[0]?.id ?? "");
   const [cells, setCells] = useState<Record<string, Cell>>(initial);
+  const [state, formAction, pending] = useActionState(saveMarks, {} as ExamActionState);
 
   function key(subjectId: string, studentId: string, componentId: string) {
     return `${subjectId}:${studentId}:${componentId}`;
@@ -92,7 +93,7 @@ export function MarksGrid({
         ))}
       </div>
 
-      <form action={saveMarks}>
+      <form action={formAction}>
         <input type="hidden" name="planId" value={planId} />
         <input type="hidden" name="subjectId" value={activeSubject} />
         <input type="hidden" name="entries" value={JSON.stringify(entries)} />
@@ -154,12 +155,20 @@ export function MarksGrid({
           </table>
         </div>
 
+        {state.error && (
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200">{state.error}</p>
+        )}
+        {state.ok && state.message && (
+          <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 ring-1 ring-inset ring-green-200">{state.message}</p>
+        )}
+
         {editable && (
           <div className="mt-4 flex gap-2">
             <button
               type="submit"
               name="submit"
               value="save"
+              disabled={pending}
               className="rounded-lg bg-white px-4 py-2 text-sm font-medium ring-1 ring-inset ring-[color:var(--color-line)] hover:bg-slate-50"
             >
               Save marks
@@ -168,6 +177,7 @@ export function MarksGrid({
               type="submit"
               name="submit"
               value="submit"
+              disabled={pending}
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
             >
               Save &amp; submit for approval

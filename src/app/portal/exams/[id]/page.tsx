@@ -7,6 +7,7 @@ import { computePlanResults } from "@/lib/exams-server";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { MarksGrid } from "./MarksGrid";
 import { setPlanStatus, publishResults } from "../actions";
+import { ActionForm } from "@/components/ActionForm";
 
 export default async function PlanDetailPage({
   params,
@@ -87,29 +88,23 @@ export default async function PlanDetailPage({
             )}
 
             {plan.status === "SUBMITTED" && canApprove && (
-              <form action={setPlanStatus}>
+              <ActionForm action={setPlanStatus} submit="Approve">
                 <input type="hidden" name="planId" value={plan.id} />
                 <input type="hidden" name="status" value="APPROVED" />
-                <button className={btnPrimary}>Approve</button>
-              </form>
+              </ActionForm>
             )}
-            {(plan.status === "APPROVED" || plan.status === "PUBLISHED") && canApprove && (
-              <form action={publishResults}>
+            {plan.status === "APPROVED" && canApprove && (
+              <ActionForm action={publishResults} submit="Publish results" confirmText="Publish these results and notify guardians?">
                 <input type="hidden" name="planId" value={plan.id} />
-                {plan.status === "PUBLISHED" && (
-                  <input type="hidden" name="reason" value="Correction" />
-                )}
-                <button className={btnPrimary} disabled={missing > 0}>
-                  {plan.status === "PUBLISHED" ? "Republish (new version)" : "Publish results"}
-                </button>
-              </form>
+                <input type="hidden" name="reason" value={latestVersion ? "Correction" : ""} />
+              </ActionForm>
             )}
             {plan.status !== "OPEN" && canApprove && (
-              <form action={setPlanStatus}>
+              <ActionForm action={setPlanStatus} submit="Reopen" variant="ghost" className="flex items-center gap-2">
                 <input type="hidden" name="planId" value={plan.id} />
                 <input type="hidden" name="status" value="OPEN" />
-                <button className={btnGhost}>Reopen for edits</button>
-              </form>
+                <input name="reason" required minLength={5} maxLength={300} placeholder="Reason for reopening" className="rounded-lg border border-[color:var(--color-line)] px-2 py-1.5 text-sm" />
+              </ActionForm>
             )}
           </div>
         </div>
@@ -190,8 +185,3 @@ export default async function PlanDetailPage({
     </div>
   );
 }
-
-const btnPrimary =
-  "rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50";
-const btnGhost =
-  "rounded-lg bg-white px-3.5 py-2 text-sm font-medium ring-1 ring-inset ring-[color:var(--color-line)] hover:bg-slate-50";

@@ -102,6 +102,12 @@ export function canForCampus(
   return set.has(WILDCARD) || set.has(perm);
 }
 
+// Does the user hold a permission on every one of these campuses? Used for
+// tenant-wide configuration that changes all campuses at once.
+export function canOnAll(ctx: AuthzContext, perm: PermissionKey, campusIds: string[]): boolean {
+  return campusIds.length > 0 && campusIds.every((id) => canForCampus(ctx, perm, id));
+}
+
 // Does the user hold a permission ANYWHERE — org-wide or on any single campus?
 // Use this for UI-shaping decisions (which dashboard to render, whether to show
 // a nav entry). `can()` alone is org-wide only, so it answers "false" for the

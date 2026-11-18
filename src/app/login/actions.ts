@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { createSession, verifyPassword } from "@/lib/auth";
+import { createSession, hasActiveMfa, verifyPassword } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { checkLoginRateLimit, resetLoginRateLimit } from "@/lib/login-rate-limit";
 import { pwnedPasswordCount } from "@/lib/hibp";
@@ -80,21 +80,29 @@ export async function loginAction(
   resetLoginRateLimit(rateLimitKey);
 
   // SEC-003: check HIBP k-Anonymity API in parallel with session creation.
+  // SEC-002: a user with two-factor enrolled only gets a pending session here;
+  // it grants nothing until the code is accepted at /login/mfa.
+  const mfaRequired = hasActiveMfa(user.mfaSecret);
   const [, breachCount] = await Promise.all([
-    createSession(user.id),
+    createSession(user.id, undefined, { mfaPending: mfaRequired }),
     pwnedPasswordCount(password),
   ]);
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-  });
+  if (!mfaRequired) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+  }
   await audit({
     tenantId: user.tenantId,
     actorUserId: user.id,
     action: "auth.login",
     outcome: "SUCCESS",
-    metadata: breachCount > 0 ? { breachedPassword: true, breachCount } : undefined,
+    metadata:
+      breachCount > 0 || mfaRequired
+        ? { ...(breachCount > 0 ? { breachedPassword: true, breachCount } : {}), ...(mfaRequired ? { mfaRequired: true } : {}) }
+        : undefined,
   });
 
   if (breachCount > 0) {
@@ -108,5 +116,5 @@ export async function loginAction(
     });
   }
 
-  redirect("/portal");
+  redirect(mfaRequired ? "/login/mfa" : "/portal");
 }

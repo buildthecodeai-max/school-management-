@@ -44,6 +44,7 @@ export default async function AcademicsPage() {
         >
           View timetable →
         </Link>
+        <Link href="/portal/academics/config" className="mr-2 inline-flex rounded bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700">Configure →</Link>
         <Link href="/portal/academics/planning" className="ml-2 inline-flex rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700">Planning →</Link>
       </div>
 

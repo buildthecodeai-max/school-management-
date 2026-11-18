@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requirePermission } from "@/lib/rbac";
+import { canAnywhere, requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { allowedCampusIds } from "@/lib/scope";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
@@ -34,10 +34,16 @@ export default async function ExamsPage() {
       <PageHeader
         title="Assessment & results"
         subtitle="Assessment plans, marks entry and report cards."
+        action={
+          <div className="flex gap-2">
+            <Link href="/portal/exams/schedule" className="rounded-lg bg-white px-3.5 py-2 text-sm font-medium ring-1 ring-inset ring-[color:var(--color-line)] hover:bg-slate-50">Exam schedules</Link>
+            {canAnywhere(ctx, "exams.manage") && <Link href="/portal/exams/new" className="rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700">New plan</Link>}
+          </div>
+        }
       />
 
       {plans.length === 0 ? (
-        <EmptyState title="No assessment plans" hint="Assessment plans appear here once created." />
+        <EmptyState title="No assessment plans" hint="Create a plan to define components, subjects and who enters marks." />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {plans.map((p) => (

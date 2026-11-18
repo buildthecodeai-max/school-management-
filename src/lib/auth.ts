@@ -10,6 +10,7 @@ const SESSION_COOKIE = "sms_session";
 // no re-login required (IAM-004).
 const IMPERSONATOR_COOKIE = "sms_impersonator_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+const MFA_PENDING_TTL_MS = 1000 * 60 * 10; // password accepted, code still owed
 
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, 12);
@@ -26,18 +27,28 @@ export function newSessionToken(): string {
   return randomBytes(32).toString("hex");
 }
 
+// An active TOTP secret is stored bare; `pending:` marks an unconfirmed enrolment.
+export function hasActiveMfa(mfaSecret: string | null | undefined): boolean {
+  return !!mfaSecret && !mfaSecret.startsWith("pending:");
+}
+
+// With `mfaPending`, the session exists but grants nothing until the user
+// completes the second factor (getSessionUser ignores it).
 export async function createSession(
   userId: string,
   meta?: { userAgent?: string; ip?: string },
+  opts?: { mfaPending?: boolean },
 ): Promise<string> {
   const token = newSessionToken();
+  const ttl = opts?.mfaPending ? MFA_PENDING_TTL_MS : SESSION_TTL_MS;
   await prisma.session.create({
     data: {
       userId,
       token,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+      expiresAt: new Date(Date.now() + ttl),
       userAgent: meta?.userAgent,
       ip: meta?.ip,
+      mfaVerified: !opts?.mfaPending,
     },
   });
   const jar = await cookies();
@@ -46,9 +57,39 @@ export async function createSession(
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: SESSION_TTL_MS / 1000,
+    maxAge: ttl / 1000,
   });
   return token;
+}
+
+// The session that is waiting for its second factor, if any.
+export async function getPendingMfaSession() {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  const session = await prisma.session.findUnique({
+    where: { token },
+    include: { user: true },
+  });
+  if (!session || session.mfaVerified || session.expiresAt < new Date()) return null;
+  if (session.user.status === "DISABLED" || !hasActiveMfa(session.user.mfaSecret)) return null;
+  return { sessionId: session.id, user: session.user };
+}
+
+export async function completeMfaSession(sessionId: string): Promise<void> {
+  await prisma.session.update({
+    where: { id: sessionId },
+    data: { mfaVerified: true, expiresAt: new Date(Date.now() + SESSION_TTL_MS) },
+  });
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (token)
+    jar.set(SESSION_COOKIE, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: SESSION_TTL_MS / 1000,
+    });
 }
 
 export async function destroySession(): Promise<void> {
@@ -84,6 +125,7 @@ export async function getSessionUser() {
   });
 
   if (!session) return null;
+  if (!session.mfaVerified) return null;
   if (session.expiresAt < new Date()) {
     await prisma.session.deleteMany({ where: { token } });
     return null;

@@ -9,27 +9,14 @@ import { prisma } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { syncSeats, checkLimit } from "@/lib/entitlements";
 import { z } from "zod";
-import { ALL_PERMISSIONS } from "@/lib/permissions";
+import { ensureStandardRoles } from "@/lib/school-roles";
 
 export async function ensureSchoolRoles(form: FormData) {
   const ctx = await requireUser();
   assertPermission(ctx, "platform.manage");
   const tenantId = String(form.get("tenantId") ?? "");
   if (!(await prisma.tenant.findUnique({ where: { id: tenantId } }))) throw new Error("School not found.");
-  const tenantPermissions = ALL_PERMISSIONS.filter(p => !p.startsWith("platform."));
-  const definitions: Record<string, string[]> = {
-    "Organization Owner": tenantPermissions,
-    "Campus Administrator": tenantPermissions.filter(p => !p.startsWith("billing.") && !p.startsWith("health.") && !p.startsWith("safeguarding.")),
-    "Admissions Officer": tenantPermissions.filter(p => p.startsWith("admissions.") || ["student.read", "guardian.read", "campus.read", "message.read"].includes(p)),
-    "Finance Officer": tenantPermissions.filter(p => p.startsWith("fee.") && p !== "fee.adjust" || ["student.read", "campus.read", "message.read"].includes(p)),
-    "Teacher": ["student.read", "academics.read", "attendance.read", "attendance.write", "exams.read", "exams.enter", "timetable.read", "campus.read", "message.read"],
-    "Parent / Guardian": ["message.read"],
-  };
-  await prisma.$transaction(async tx => {
-    for (const [name, permissions] of Object.entries(definitions)) {
-      if (!(await tx.role.findFirst({ where: { tenantId, name } }))) await tx.role.create({ data: { tenantId, name, permissions } });
-    }
-  });
+  await prisma.$transaction((tx) => ensureStandardRoles(tx, tenantId));
   await audit({ tenantId, actorUserId: ctx.user.id, action: "platform.roles.initialized", scopeType: "PLATFORM" });
   revalidatePath(`/portal/platform/tenants/${tenantId}`);
 }

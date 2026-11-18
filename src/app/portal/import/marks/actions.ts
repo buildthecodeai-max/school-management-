@@ -51,6 +51,17 @@ export async function previewMarkImport(
   if (!canForCampus(ctx, "exams.enter", plan.campusId))
     return { rows: [], summary: { total: 0, valid: 0, invalid: 0 }, error: "You need exams.enter permission for this campus." };
 
+  // Same rules as manual entry (saveMarks): the plan must be open, and only a
+  // manager or the subject's assigned teacher may enter that subject's marks.
+  if (plan.status !== "OPEN")
+    return { rows: [], summary: { total: 0, valid: 0, invalid: 0 }, error: "Marks entry is closed. Ask an approver to reopen the plan." };
+  const canManage = canForCampus(ctx, "exams.manage", plan.campusId);
+  const staff = ctx.user.personId ? await prisma.staff.findUnique({ where: { personId: ctx.user.personId } }) : null;
+  const allowedSubject = (ps: { teacherStaffId: string | null }) =>
+    canManage || !ps.teacherStaffId || ps.teacherStaffId === staff?.id;
+  const planSubjectById = new Map(plan.subjects.map((ps) => [ps.subjectId, ps]));
+  const maxByComponent = new Map(plan.components.map((c) => [c.id, c.maxMarks]));
+
   const studentByAdm = new Map(
     plan.section.enrollments.map((e) => [e.student.admissionNumber.toLowerCase(), e.student.id]),
   );
@@ -80,6 +91,9 @@ export async function previewMarkImport(
       : undefined;
     if (data.component && !componentId) errors.push(`Component "${data.component}" not in this plan`);
 
+    const ps = subjectId ? planSubjectById.get(subjectId) : undefined;
+    if (ps && !allowedSubject(ps)) errors.push(`You are not assigned to enter marks for "${data.subject}"`);
+
     const rawMarks = data.marks?.trim();
     let parsedMarks: number | null = null;
     if (rawMarks && rawMarks !== "") {
@@ -87,6 +101,9 @@ export async function previewMarkImport(
       if (!Number.isFinite(n) || n < 0) errors.push(`Invalid marks value "${rawMarks}"`);
       else parsedMarks = n;
     }
+    const maxMarks = componentId ? maxByComponent.get(componentId) : undefined;
+    if (parsedMarks !== null && maxMarks !== undefined && parsedMarks > maxMarks)
+      errors.push(`Marks must be between 0 and ${maxMarks}`);
 
     const rawStatus = (data.status?.trim().toUpperCase() || "NORMAL") as string;
     if (!VALID_STATUSES.includes(rawStatus)) errors.push(`Invalid status "${data.status}" — use NORMAL, ABSENT, or EXEMPT`);

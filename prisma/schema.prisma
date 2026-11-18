@@ -258,6 +258,9 @@ model Session {
   // Set when a platform staff member is impersonating this session's user
   // (IAM-004). Never set by anything other than the impersonation start flow.
   impersonatedByUserId  String?
+  // false while the password has been accepted but the user still owes the
+  // two-factor code (SEC-002); such a session grants no access.
+  mfaVerified           Boolean  @default(true)
   createdAt             DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

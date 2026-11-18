@@ -208,6 +208,7 @@ const NAV: NavItem[] = [
   },
   { href: "/portal/certificates", label: "Certificates", icon: <GraduationCap size={18} />, perm: "student.write" },
   { href: "/portal/hostel", label: "Hostel", icon: <Building2 size={18} />, perm: "student.write" },
+  { href: "/portal/approvals", label: "Approvals", icon: <ShieldCheck size={18} /> },
   { href: "/portal/reports", label: "Reports", icon: <ClipboardCheck size={18} /> },
 ];
 

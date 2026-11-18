@@ -1,3 +1,4 @@
+import { ctxTranslator } from "@/lib/i18n";
 import Link from "next/link";
 import { requirePermission, canForCampus } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
@@ -15,6 +16,7 @@ function agingBucket(dueDate: Date): "current" | "1-30" | "31-60" | "60+" {
 
 export default async function FeesDashboardPage() {
   const ctx = await requirePermission("fee.read");
+  const tr = ctxTranslator(ctx);
   const campusIds = allowedCampusIds(ctx, "fee.read");
   const campusFilter = campusIds ? { campusId: { in: campusIds } } : {};
   const anyCampus = ctx.campusIds[0];
@@ -57,31 +59,31 @@ export default async function FeesDashboardPage() {
   return (
     <div>
       <PageHeader
-        title="Fees & finance"
-        subtitle="Billing, collections and outstanding balances."
+        title={tr("Fees & finance")}
+        subtitle={tr("Billing, collections and outstanding balances.")}
         action={
           <div className="flex gap-2">
             <ButtonLink href="/portal/fees/reports" variant="ghost">
-              Reports
+              {tr("Reports")}
             </ButtonLink>
             <ButtonLink href="/portal/fees/structures" variant="ghost">
-              Fee structures
+              {tr("Fee structures")}
             </ButtonLink>
-            {canBill && <ButtonLink href="/portal/fees/billing">Run billing</ButtonLink>}
+            {canBill && <ButtonLink href="/portal/fees/billing">{tr("Run billing")}</ButtonLink>}
           </div>
         }
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Billed" value={formatMoney(billed)} />
-        <StatCard label="Collected" value={formatMoney(collected)} tone="green" hint={`${collectionRate}% of billed`} />
-        <StatCard label="Outstanding" value={formatMoney(outstanding)} tone="amber" />
-        <StatCard label="Overdue" value={formatMoney(aging["1-30"] + aging["31-60"] + aging["60+"])} tone="red" />
+        <StatCard label={tr("Billed")} value={formatMoney(billed)} />
+        <StatCard label={tr("Collected")} value={formatMoney(collected)} tone="green" hint={tr("{n}% of billed", { n: collectionRate })} />
+        <StatCard label={tr("Outstanding")} value={formatMoney(outstanding)} tone="amber" />
+        <StatCard label={tr("Overdue")} value={formatMoney(aging["1-30"] + aging["31-60"] + aging["60+"])} tone="red" />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
-          <h3 className="mb-3 font-semibold">Aging of outstanding</h3>
+          <h3 className="mb-3 font-semibold">{tr("Aging of outstanding")}</h3>
           <ul className="space-y-2 text-sm">
             {(["current", "1-30", "31-60", "60+"] as const).map((k) => {
               const pct = outstanding > 0 ? Math.round((aging[k] / outstanding) * 100) : 0;
@@ -90,7 +92,7 @@ export default async function FeesDashboardPage() {
                 <li key={k}>
                   <div className="flex justify-between">
                     <span className="text-[color:var(--color-muted)]">
-                      {k === "current" ? "Not due" : `${k} days`}
+                      {k === "current" ? tr("Not due") : tr("{n} days", { n: k })}
                     </span>
                     <span className="font-medium">{formatMoney(aging[k])}</span>
                   </div>
@@ -104,9 +106,9 @@ export default async function FeesDashboardPage() {
         </Card>
 
         <Card>
-          <h3 className="mb-3 font-semibold">Recent invoices</h3>
+          <h3 className="mb-3 font-semibold">{tr("Recent invoices")}</h3>
           {recentInvoices.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-muted)]">None yet.</p>
+            <p className="text-sm text-[color:var(--color-muted)]">{tr("None yet.")}</p>
           ) : (
             <ul className="divide-y divide-[color:var(--color-line)]">
               {recentInvoices.map((i) => (
@@ -125,9 +127,9 @@ export default async function FeesDashboardPage() {
         </Card>
 
         <Card>
-          <h3 className="mb-3 font-semibold">Recent payments</h3>
+          <h3 className="mb-3 font-semibold">{tr("Recent payments")}</h3>
           {recentPayments.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-muted)]">None yet.</p>
+            <p className="text-sm text-[color:var(--color-muted)]">{tr("None yet.")}</p>
           ) : (
             <ul className="divide-y divide-[color:var(--color-line)]">
               {recentPayments.map((p) => (

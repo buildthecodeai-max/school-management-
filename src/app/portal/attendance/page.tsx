@@ -1,3 +1,4 @@
+import { ctxLocale, ctxTranslator } from "@/lib/i18n";
 import Link from "next/link";
 import { requirePermission } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
@@ -7,6 +8,7 @@ import { PageHeader, Card, Badge, EmptyState, ButtonLink } from "@/components/ui
 
 export default async function AttendanceListPage() {
   const ctx = await requirePermission("attendance.read");
+  const tr = ctxTranslator(ctx);
   const campusIds = allowedCampusIds(ctx, "attendance.read");
 
   const sections = await prisma.section.findMany({
@@ -29,19 +31,19 @@ export default async function AttendanceListPage() {
   return (
     <div>
       <PageHeader
-        title="Attendance"
-        subtitle={`Take and review today's registers · ${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`}
+        title={tr("Attendance")}
+        subtitle={`${tr("Take and review today's registers")} · ${new Date().toLocaleDateString(ctxLocale(ctx), { weekday: "long", month: "long", day: "numeric" })}`}
         action={
           <ButtonLink href="/portal/attendance/analytics" variant="ghost">
-            Analytics
+            {tr("Analytics")}
           </ButtonLink>
         }
       />
 
       {sections.length === 0 ? (
         <EmptyState
-          title="No sections in your scope"
-          hint="You need attendance access on a campus with sections."
+          title={tr("No sections in your scope")}
+          hint={tr("You need attendance access on a campus with sections.")}
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -71,12 +73,11 @@ export default async function AttendanceListPage() {
                               : "sky"
                       }
                     >
-                      {status === "NOT_STARTED" ? "Not started" : status}
+                      {status === "NOT_STARTED" ? tr("Not started") : tr(status)}
                     </Badge>
                   </div>
                   <p className="mt-4 text-sm text-[color:var(--color-muted)]">
-                    {s._count.enrollments} student
-                    {s._count.enrollments === 1 ? "" : "s"}
+                    {tr(s._count.enrollments === 1 ? "{n} student" : "{n} students", { n: s._count.enrollments })}
                   </p>
                 </Card>
               </Link>

@@ -1,3 +1,4 @@
+import { ctxTranslator } from "@/lib/i18n";
 import Link from "next/link";
 import { requirePermission, can } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
@@ -11,6 +12,7 @@ export default async function StudentsPage({
   searchParams: Promise<{ q?: string; campus?: string }>;
 }) {
   const ctx = await requirePermission("student.read");
+  const tr = ctxTranslator(ctx);
   const { q } = await searchParams;
 
   // Campus-scoped tenant isolation via the shared helper.
@@ -46,18 +48,18 @@ export default async function StudentsPage({
   return (
     <div>
       <PageHeader
-        title="Students"
-        subtitle={`${enrollments.length} active enrollment${enrollments.length === 1 ? "" : "s"} in your scope`}
+        title={tr("Students")}
+        subtitle={tr(enrollments.length === 1 ? "{n} active enrollment in your scope" : "{n} active enrollments in your scope", { n: enrollments.length })}
         action={
           <div className="flex gap-2">
             {(can(ctx, "student.write") || [...ctx.campusPermissions.values()].some((s) => s.has("student.write") || s.has("*"))) && (
               <ButtonLink href="/portal/students/bulk" variant="ghost">
-                Bulk actions
+                {tr("Bulk actions")}
               </ButtonLink>
             )}
             {(can(ctx, "data.import") || [...ctx.campusPermissions.values()].some((s) => s.has("data.import") || s.has("*"))) && (
               <ButtonLink href="/portal/import" variant="ghost">
-                Import students
+                {tr("Import students")}
               </ButtonLink>
             )}
           </div>
@@ -69,18 +71,18 @@ export default async function StudentsPage({
           <input
             name="q"
             defaultValue={q ?? ""}
-            placeholder="Search by name…"
+            placeholder={tr("Search by name…")}
             className="w-full max-w-md rounded-lg border border-[color:var(--color-line)] px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
           />
           <button className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
-            Search
+            {tr("Search")}
           </button>
           {q && (
             <Link
               href="/portal/students"
               className="rounded-lg px-3 py-2 text-sm text-[color:var(--color-muted)] hover:underline"
             >
-              Clear
+              {tr("Clear")}
             </Link>
           )}
         </form>
@@ -88,8 +90,8 @@ export default async function StudentsPage({
 
       {enrollments.length === 0 ? (
         <EmptyState
-          title="No students found"
-          hint="Try a different search, or check your campus scope."
+          title={tr("No students found")}
+          hint={tr("Try a different search, or check your campus scope.")}
         />
       ) : (
         <Card className="p-0">
@@ -97,12 +99,12 @@ export default async function StudentsPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[color:var(--color-line)] text-left text-xs uppercase tracking-wide text-[color:var(--color-muted)]">
-                  <th className="px-5 py-3 font-medium">Student</th>
-                  <th className="px-5 py-3 font-medium">Admission&nbsp;no.</th>
-                  <th className="px-5 py-3 font-medium">Campus</th>
-                  <th className="px-5 py-3 font-medium">Grade / Section</th>
-                  <th className="px-5 py-3 font-medium">Roll</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 font-medium">{tr("Student")}</th>
+                  <th className="px-5 py-3 font-medium">{tr("Admission no.")}</th>
+                  <th className="px-5 py-3 font-medium">{tr("Campus")}</th>
+                  <th className="px-5 py-3 font-medium">{tr("Grade / Section")}</th>
+                  <th className="px-5 py-3 font-medium">{tr("Roll")}</th>
+                  <th className="px-5 py-3 font-medium">{tr("Status")}</th>
                 </tr>
               </thead>
               <tbody>

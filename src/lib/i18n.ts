@@ -1,4 +1,5 @@
 import { isSupportedLocale } from "./locales";
+import { EXTRA } from "./i18n-pages";
 
 // Portal UI translations, keyed by the English source string. A missing
 // locale or missing key falls back to English, so screens can be translated
@@ -62,7 +63,10 @@ const ar: Dict = {
   "Notification preferences": "تفضيلات الإشعارات", "Message inbox": "صندوق الرسائل",
 };
 
-const DICTS: Record<string, Dict> = { es, fr, pt, ar };
+const BASE: Record<string, Dict> = { es, fr, pt, ar };
+const DICTS: Record<string, Dict> = Object.fromEntries(
+  Object.keys({ ...BASE, ...EXTRA }).map((l) => [l, { ...BASE[l], ...EXTRA[l] }]),
+);
 const RTL = new Set(["ar"]);
 
 export function resolveUiLocale(userLocale: string | null | undefined, tenantLocale: string | null | undefined): string {
@@ -70,9 +74,23 @@ export function resolveUiLocale(userLocale: string | null | undefined, tenantLoc
   return "en";
 }
 
-export function translator(locale: string): (s: string) => string {
+// `vars` fills {placeholders}, e.g. tr("{n} days", { n: 30 }).
+export type Translate = (s: string, vars?: Record<string, string | number>) => string;
+
+export function translator(locale: string): Translate {
   const dict = DICTS[locale];
-  return (s) => dict?.[s] ?? s;
+  return (s, vars) => {
+    const out = dict?.[s] ?? s;
+    return vars ? out.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)) : out;
+  };
+}
+
+export function ctxLocale(ctx: { user: { locale: string | null; tenant: { locale: string } | null } }): string {
+  return resolveUiLocale(ctx.user.locale, ctx.user.tenant?.locale);
+}
+
+export function ctxTranslator(ctx: { user: { locale: string | null; tenant: { locale: string } | null } }): Translate {
+  return translator(resolveUiLocale(ctx.user.locale, ctx.user.tenant?.locale));
 }
 
 export function textDirection(locale: string): "rtl" | "ltr" {

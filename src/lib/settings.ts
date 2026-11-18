@@ -29,6 +29,8 @@ export const SETTING_DEFS = {
   "library.maxLoansPerUser": { label: "Max concurrent loans", description: "Maximum items a borrower may hold at once", default: "3", group: "Library", kind: "int" },
   "library.finePerDayCents": { label: "Overdue fine per day", description: "Fine accrued for each day an item is overdue", default: "500", group: "Library", kind: "cents" },
   "inventory.lowStockThreshold": { label: "Low-stock alert threshold", description: "Alert when stock falls at or below this level", default: "5", group: "Inventory", kind: "int" },
+  "notifications.throttleMax": { label: "Max external notifications per recipient", description: "Email/SMS sent to one person within the window before further non-urgent ones are held back (they still reach the in-app inbox). 0 = no limit", default: "10", group: "Notifications", kind: "int" },
+  "notifications.throttleWindowMinutes": { label: "Notification throttle window (minutes)", description: "Length of the rolling window used by the limit above", default: "60", group: "Notifications", kind: "int" },
   "exam.passThresholdPct": { label: "Pass threshold (%)", description: "Minimum percentage to be marked as passed", default: "50", group: "Exams", kind: "int" },
 } as const satisfies Record<string, SettingDef>;
 

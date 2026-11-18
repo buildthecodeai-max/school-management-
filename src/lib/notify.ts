@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "./db";
 import { PROVIDERS } from "./notification-providers";
 import { pickByLocale } from "./locales";
+import { effectiveSettingInt } from "./settings";
 import type { NotificationCategory, NotificationChannel } from "@prisma/client";
 
 // Categories that always deliver regardless of user opt-out (NTF-004):
@@ -88,6 +89,26 @@ function inQuietWindow(hour: number, start: number, end: number): boolean {
   return hour >= start || hour < end; // wraps past midnight
 }
 
+async function buildThrottleCheck(tenantId: string, userId: string) {
+  const [max, windowMinutes] = await Promise.all([
+    effectiveSettingInt(tenantId, null, "notifications.throttleMax"),
+    effectiveSettingInt(tenantId, null, "notifications.throttleWindowMinutes"),
+  ]);
+  return async (channel: NotificationChannel): Promise<boolean> => {
+    if (max <= 0 || windowMinutes <= 0) return false;
+    const sent = await prisma.deliveryAttempt.count({
+      where: {
+        tenantId,
+        channel,
+        status: "SENT",
+        attemptedAt: { gte: new Date(Date.now() - windowMinutes * 60_000) },
+        message: { recipientUserId: userId },
+      },
+    });
+    return sent >= max;
+  };
+}
+
 /**
  * Central notification dispatch (NTF-001). Every domain event should call
  * this instead of writing to Message directly, so dedup, preferences, quiet
@@ -148,6 +169,14 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     setting?.quietHoursEndHour != null &&
     inQuietWindow(currentHour(), setting.quietHoursStartHour, setting.quietHoursEndHour);
 
+  // NTF throttle: cap non-urgent external sends per recipient per rolling
+  // window so bursts (e.g. many attendance alerts) don't flood one person.
+  // Security/billing and urgent notices are exempt; in-app always delivers.
+  const throttled =
+    mandatory || input.urgent
+      ? async () => false
+      : await buildThrottleCheck(input.tenantId, input.recipientUserId);
+
   const deliveries: NotifyResult["deliveries"] = [];
 
   for (const channel of candidateChannels) {
@@ -179,6 +208,22 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
           provider: PROVIDERS[channel].name,
           status: "SKIPPED",
           error: "Suppressed during recipient quiet hours",
+          correlationId,
+        },
+      });
+      continue;
+    }
+
+    if (await throttled(channel)) {
+      deliveries.push({ channel, status: "SKIPPED" });
+      await prisma.deliveryAttempt.create({
+        data: {
+          tenantId: input.tenantId,
+          messageId: message.id,
+          channel,
+          provider: PROVIDERS[channel].name,
+          status: "SKIPPED",
+          error: "Throttled: recipient reached the per-window notification limit",
           correlationId,
         },
       });

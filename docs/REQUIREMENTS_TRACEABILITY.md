@@ -220,8 +220,7 @@ Safeguarding. Dedicated `safeguardingOfficerRole` seeded for demo.
 |---|---|
 | API-007 deprecation tooling | No v2 exists; premature |
 | Real payment-gateway webhook integration | No provider credentials in this environment; stub the event shape only |
-| HaveIBeenPwned breach check | External network dependency, untestable offline |
-| CFG-002 campus template clone | High-complexity $transaction; not yet built |
+| CFG-002 campus template clone | ✅ Implemented phase 7 (`portal/setup/clone-actions.ts`) |
 | CFG-003 generic custom-status/workflow engine | Kept as hardcoded enums; no business case for generic engine yet |
 | BRN campus merge | High risk, low frequency |
 | Already-enrolled student-record merge (ADM-006) | Too many FK cascades to do safely in one pass |

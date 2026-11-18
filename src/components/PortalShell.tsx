@@ -334,17 +334,17 @@ export async function PortalShell({
                 />
               </form>
             )}
-            <div className="text-right">
+            <Link href="/portal/account" className="text-right hover:opacity-80">
               <p className="text-sm font-medium leading-tight">
                 {user.displayName}
               </p>
               <p className="text-xs text-[color:var(--color-muted)]">
                 {roleNames || "No role"}
               </p>
-            </div>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+            </Link>
+            <Link href="/portal/account" aria-label="Account settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 hover:bg-brand-200 transition">
               {user.displayName.slice(0, 1).toUpperCase()}
-            </div>
+            </Link>
           </div>
         </header>
 

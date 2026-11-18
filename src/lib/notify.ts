@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { prisma } from "./db";
 import { PROVIDERS } from "./notification-providers";
+import { pickByLocale } from "./locales";
 import type { NotificationCategory, NotificationChannel } from "@prisma/client";
 
 // Categories that always deliver regardless of user opt-out (NTF-004):
@@ -46,9 +47,13 @@ export async function notifyFromTemplate(
   variables: Record<string, string>,
   input: Omit<NotifyInput, "title" | "body">,
 ): Promise<NotifyResult> {
-  const template = await prisma.messageTemplate.findFirst({
-    where: { tenantId: input.tenantId, code: templateCode },
-  });
+  // NTF locale: recipient's language, then the organization's, then English.
+  const [candidates, recipient, tenant] = await Promise.all([
+    prisma.messageTemplate.findMany({ where: { tenantId: input.tenantId, code: templateCode } }),
+    prisma.user.findUnique({ where: { id: input.recipientUserId }, select: { locale: true } }),
+    prisma.tenant.findUnique({ where: { id: input.tenantId }, select: { locale: true } }),
+  ]);
+  const template = pickByLocale(candidates, [recipient?.locale, tenant?.locale, "en"]);
   if (!template) {
     throw new Error(`Notification template "${templateCode}" not found for tenant ${input.tenantId}`);
   }

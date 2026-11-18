@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { PageHeader, Card } from "@/components/ui";
+import { SUPPORTED_LOCALES } from "@/lib/locales";
 import { savePreferences } from "./actions";
 import type { NotificationCategory, NotificationChannel } from "@prisma/client";
 
@@ -83,6 +84,23 @@ export default async function PreferencesPage() {
               </tbody>
             </table>
           </div>
+        </Card>
+
+        <Card>
+          <h3 className="mb-3 font-semibold">Language</h3>
+          <p className="mb-3 text-sm text-[color:var(--color-muted)]">
+            Templated notifications are sent in this language when your school has a translation.
+          </p>
+          <select
+            name="locale"
+            defaultValue={ctx.user.locale ?? ""}
+            className="rounded-lg border border-[color:var(--color-line)] px-3 py-2 text-sm"
+          >
+            <option value="">School default</option>
+            {SUPPORTED_LOCALES.map((l) => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
         </Card>
 
         <Card>

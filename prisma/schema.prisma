@@ -221,6 +221,8 @@ model User {
   mfaEnabled     Boolean    @default(false)
   // SEC-002: TOTP secret (base32), null = MFA not enrolled
   mfaSecret      String?
+  // Preferred language for notifications; null = organization default
+  locale         String?
   // SEC-003: password policy tracking
   passwordChangedAt DateTime?
   lastLoginAt    DateTime?
@@ -1778,10 +1780,11 @@ model MessageTemplate {
   dataClassification String        @default("INTERNAL")
   titleTemplate String
   bodyTemplate  String             // {{variable}} placeholders
+  locale      String               @default("en")
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
-  @@unique([tenantId, code])
+  @@unique([tenantId, code, locale])
   @@index([tenantId])
   @@map("message_templates")
 }

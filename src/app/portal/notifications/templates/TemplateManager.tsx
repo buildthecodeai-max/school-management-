@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { SUPPORTED_LOCALES } from "@/lib/locales";
 import { saveTemplate, deleteTemplate, type TemplateActionState } from "./actions";
 
 const input = "w-full rounded-md border border-[color:var(--color-line)] bg-white px-2 py-1.5 text-sm";
@@ -8,7 +9,7 @@ const CATEGORIES = ["ATTENDANCE", "FINANCE", "ACADEMICS", "ADMISSIONS", "ANNOUNC
 const CLASSIFICATIONS = ["PUBLIC", "INTERNAL", "SENSITIVE"];
 
 type Template = {
-  id: string; code: string; name: string; category: string;
+  id: string; code: string; locale: string; name: string; category: string;
   dataClassification: string; titleTemplate: string; bodyTemplate: string;
 };
 
@@ -36,6 +37,13 @@ function TemplateForm({ template, onDone }: { template?: Template; onDone?: () =
         <div>
           <label className="mb-1 block text-xs text-[color:var(--color-muted)]">Code (read-only after creation)</label>
           <input name="code" defaultValue={template?.code} required readOnly={!!template} placeholder="fee.invoice.issued" className={input} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-[color:var(--color-muted)]">Language (read-only after creation)</label>
+          {template && <input type="hidden" name="locale" value={template.locale} />}
+          <select name="locale" defaultValue={template?.locale ?? "en"} disabled={!!template} className={input}>
+            {SUPPORTED_LOCALES.map(l => <option key={l.code} value={l.code}>{l.label} ({l.code})</option>)}
+          </select>
         </div>
         <div>
           <label className="mb-1 block text-xs text-[color:var(--color-muted)]">Display name</label>
@@ -87,7 +95,7 @@ function TemplateRow({ template }: { template: Template }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-medium">{template.name}</p>
-          <p className="font-mono text-xs text-[color:var(--color-muted)]">{template.code}</p>
+          <p className="font-mono text-xs text-[color:var(--color-muted)]">{template.code} · {template.locale}</p>
           <p className="mt-1 text-sm text-[color:var(--color-muted)]">{template.titleTemplate}</p>
           <p className="mt-0.5 text-xs text-[color:var(--color-muted)]">{template.category} · {template.dataClassification}</p>
         </div>
@@ -111,7 +119,7 @@ export function TemplateManager({ templates }: { templates: Template[] }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-[color:var(--color-muted)]">
-            Templates are reusable notification bodies with {"{{variable}}"} placeholders. They are referenced by code from server actions via <code className="text-xs">notifyFromTemplate()</code>.
+            Templates are reusable notification bodies with {"{{variable}}"} placeholders. Add one per language under the same code; each recipient gets their own language, falling back to the organization default, then English. They are referenced by code from server actions via <code className="text-xs">notifyFromTemplate()</code>.
           </p>
         </div>
         <button onClick={() => setCreating(!creating)} className="shrink-0 rounded bg-brand-600 px-3 py-1.5 text-sm text-white">

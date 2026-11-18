@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
+import { isSupportedLocale } from "@/lib/locales";
 
 export interface TemplateActionState {
   error?: string;
@@ -20,11 +21,13 @@ export async function saveTemplate(
   const name = formData.get("name")?.toString().trim() ?? "";
   const category = formData.get("category")?.toString() ?? "ANNOUNCEMENT";
   const dataClassification = formData.get("dataClassification")?.toString() ?? "INTERNAL";
+  const locale = formData.get("locale")?.toString().trim() || "en";
   const titleTemplate = formData.get("titleTemplate")?.toString().trim() ?? "";
   const bodyTemplate = formData.get("bodyTemplate")?.toString().trim() ?? "";
 
   if (!code || !name || !titleTemplate || !bodyTemplate)
     return { error: "Code, name, title and body are required." };
+  if (!isSupportedLocale(locale)) return { error: "Unsupported language." };
   if (!/^[a-z][a-z0-9._-]*$/.test(code))
     return { error: "Code must be lowercase letters, numbers, dots, hyphens or underscores, starting with a letter." };
 
@@ -41,13 +44,13 @@ export async function saveTemplate(
       await audit({ tenantId: ctx.tenantId, actorUserId: ctx.user.id, action: "ntf.template.updated", targetType: "MessageTemplate", targetId: id, scopeType: "ORG", metadata: { code } });
     } else {
       const created = await prisma.messageTemplate.create({
-        data: { tenantId: ctx.tenantId!, code, name, category: category as never, dataClassification, titleTemplate, bodyTemplate },
+        data: { tenantId: ctx.tenantId!, code, locale, name, category: category as never, dataClassification, titleTemplate, bodyTemplate },
       });
       await audit({ tenantId: ctx.tenantId, actorUserId: ctx.user.id, action: "ntf.template.created", targetType: "MessageTemplate", targetId: created.id, scopeType: "ORG", metadata: { code } });
     }
   } catch (e: unknown) {
     if ((e as { code?: string }).code === "P2002")
-      return { error: `A template with code "${code}" already exists.` };
+      return { error: `A "${locale}" template with code "${code}" already exists.` };
     return { error: "Failed to save template." };
   }
 

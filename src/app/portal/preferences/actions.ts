@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
+import { isSupportedLocale } from "@/lib/locales";
 import type { NotificationCategory, NotificationChannel } from "@prisma/client";
 
 const CHANNELS: NotificationChannel[] = ["EMAIL", "SMS"];
@@ -47,6 +48,14 @@ export async function savePreferences(formData: FormData) {
       where: { userId },
       create: { tenantId, userId, quietHoursStartHour, quietHoursEndHour },
       update: { quietHoursStartHour, quietHoursEndHour },
+    }),
+  );
+
+  const localeRaw = String(formData.get("locale") ?? "");
+  writes.push(
+    prisma.user.update({
+      where: { id: userId },
+      data: { locale: localeRaw && isSupportedLocale(localeRaw) ? localeRaw : null },
     }),
   );
 

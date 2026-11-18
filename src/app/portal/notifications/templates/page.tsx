@@ -11,7 +11,7 @@ export default async function NotificationTemplatesPage() {
 
   const templates = await prisma.messageTemplate.findMany({
     where: { tenantId: ctx.tenantId! },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
+    orderBy: [{ category: "asc" }, { code: "asc" }, { locale: "asc" }],
   });
 
   return (
@@ -29,6 +29,7 @@ export default async function NotificationTemplatesPage() {
         templates={templates.map(t => ({
           id: t.id,
           code: t.code,
+          locale: t.locale,
           name: t.name,
           category: t.category,
           dataClassification: t.dataClassification,

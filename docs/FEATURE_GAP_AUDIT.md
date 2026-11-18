@@ -1,6 +1,6 @@
 # Feature Gap Audit — Scholarum vs PRD/SRS v1.2
 
-Date: 2026-09-11
+Date: 2026-09-11 (original audit). Updated 2026-11-18: see §0, which is current. Sections 1–7 are kept as the 2026-09-11 snapshot.
 Method: source inspection + runtime verification against
 `Commercial_SaaS_School_Management_Software_Hybrid_Homeschool_PRD_SRS.docx` (195 requirement IDs).
 A requirement is credited only where a reachable UI/API workflow, persistent data,
@@ -16,6 +16,98 @@ page shell, seed record, or helper without a caller does not count.
 Legend: ✅ implemented · 🟡 partial · ❌ missing · 🔴 security/backend gap · 🔵 UI/UX gap · ⚪ needs operational evidence
 
 ---
+
+## 0. Update — 2026-11-18
+
+This update does **not** re-score all 180 in-scope requirement IDs (the full
+row-by-row table is not in this file). It refreshes the verified facts, records what
+changed for the items this audit tracked, and adds a new class of finding that the
+original method (which credited only reachable workflows) would have caught had it
+been applied to the later work: backend logic that no screen can reach.
+
+### State of the build (verified 2026-11-18)
+
+| Item | Finding |
+| --- | --- |
+| `npm run build` | **Passes** (73 pages generated). It was failing on a type error in the demo script `scripts/seed-hmssb1.ts`, which sits inside the `tsconfig` include; fixed this pass. |
+| `npx tsc --noEmit` | Clean (0 errors). |
+| `npm test` (unit) | **84 pass**, 11 files. |
+| `npm run test:integration` | **29 pass**, 6 files, against real Postgres (isolation, campus switch, search scope, audit chain, student merge, payment-webhook processing). |
+| `npm run test:e2e` | 5 Playwright specs, 13 tests; still smoke-level; not re-run in this pass. |
+| Git | History exists on `main` and is pushed to GitHub. The "no commits" half of P0-1 is closed. |
+| Migrations | Still not adopted. The app is run with `prisma db push`; the checked-in migrations stop at 11 September and omit later tables and columns. A fresh baseline is required before production. |
+
+Size today: 135 Prisma models, 47 enums, 80 permission keys, 74 pages, 13 route
+handlers, 54 `"use server"` files exporting 153 server actions.
+
+### What changed for the items tracked here
+
+| Item (2026-09-11 status) | Now | Notes |
+| --- | --- | --- |
+| P0-1 git baseline + migrations (open) | 🟡 partly closed | Git ✅. Migrations ⬜ (see above) |
+| P0-2…P0-6 (closed) | ✅ still closed | Integration suite has grown from 18 to 29 tests |
+| TEN-006 offboarding (❌) | ✅ | Data export, scheduled deletion with an export-evidence gate, hard delete (phase 9) |
+| CFG-002 campus clone (not listed) | 🟡 | Server logic only; no screen (see below) |
+| CFG-003 configurable fields/statuses (❌) | 🟡 | Numbering prefixes, organization→campus settings (incl. notification throttle) and notification templates. No generic custom fields, statuses or workflows (deferred) |
+| CFG-004 import (not in the P1 list) | ✅ | Students CSV and marks CSV with preview, row errors, all-or-nothing commit |
+| POR-001/002 portals (🟡) | 🟡 | Unchanged: no student, applicant or alumni portals and no child switcher; the guardian dashboard is now translated |
+| IAM-001 role editor / effective access (🟡) | 🟡 | Unchanged. Platform operators create users and standard roles; no school-owner role editor or permission preview |
+| SIS-002 guardian flags (🟡) | 🟡 | Flags are editable and honoured by transport notifications; enforcement across guardian-portal actions not verified |
+| ATT-001 staff attendance (🟡) | 🟡 | Staff attendance is now recorded in HR; no device or file ingestion |
+| ACD-004/005 lesson plans, electives (❌) | 🟡 / ❌ | Lesson plans and homework can be created; coverage tracking and electives not built |
+| FEE-006 fee reports (❌) | ✅ | Aging, payments received, concessions, student ledger, finance dashboard |
+| HRM-002 recruitment (❌) | ✅ | Internal opening and applicant tracking with hire-to-staff (phase 20); no public careers page |
+| COM-001/004/005 (❌) | COM-004 🟡, others ❌ | Calendar events exist; announcement composer, forms/surveys and emergency broadcast do not |
+| RPT-001…008 (❌) | 🟡 | Report center with three reports (CSV/XLSX/print) and fee reports; no metric registry, scheduled reports, async export jobs or PDF generation |
+| BIL-003…006 (❌) | ❌ | Unchanged. BIL-007 is a read-only billing page (no upgrade or payment flow) |
+| SEC-003 (n/a) | ✅ | Password reset, breached-password check, login throttling |
+| SEC-002 MFA (not in the P1 list) | 🟡 | TOTP can be enrolled but is never checked at sign-in (see P0-8) |
+| SEC-006 (❌) | ❌ | Building blocks only: tenant data export, redaction of sensitive messages. No classification, retention, legal hold or DSAR workflow |
+| API-007 (❌) | 🟡 | `/api/v1` namespace exists; deprecation tooling deferred |
+| NTF-002/006/007 (roadmap E.9/E.10) | ✅ | Templates (one per language), delivery log with retry, daily digest endpoint, per-recipient throttle, sensitive-message redaction |
+| DEP/SYN/LIC/MOB (❌) | ❌ | Unchanged; no code |
+
+### New finding: reachability gaps
+
+Server logic, permissions and audit exist for many workflows, but no screen calls
+them, a few links point at pages that were never built, and much setup data has no
+creation path. By the original rule ("a helper without a caller does not count"),
+these are not implemented. Full lists are in
+[REQUIREMENTS_TRACEABILITY.md](REQUIREMENTS_TRACEABILITY.md#reachability-gaps-found-2026-11-18);
+the headline numbers are:
+
+| Measure | Count |
+| --- | --- |
+| Exported server actions with no caller | **31 of 153** |
+| Internal links to routes that do not exist | **4** (timetable slot form, inventory requisition form, safeguarding case page, transport trip form) |
+| Rows in the traceability document regraded ✅ → 🟡 | **34** |
+| Kinds of setup data with no creation path (seed only) | 20+ (academic years, terms, grades, sections, subjects, grade scales, assessment plans, attendance codes, leave types, departments, positions, rooms, vehicles, routes, stops, inventory items/categories/warehouses/suppliers, fee assignments, …) |
+
+### New items for the P0/P1 lists
+
+| # | Issue | Status |
+| --- | --- | --- |
+| P0-7 | **A school created in the platform console cannot be used.** The provisioning wizard looks for a role named "Campus Admin" (the standard role is "Campus Administrator" and does not exist yet at that point), so the admin gets no role; the temporary password is never shown; no subscription is created and `updateSubscription` only edits an existing one; and no screen creates academic years, terms, grades, sections, subjects, grade scales, assessment plans, attendance codes or leave types. Someone has to populate the school by script. | **Open** |
+| P0-8 | 🔴 **Two-factor authentication is not enforced at sign-in.** Enrolling, verifying and disabling TOTP work (`/portal/settings/security`), but `loginAction` creates the session right after the password check and never asks for the code. A user who turns MFA on is still admitted with the password alone; MFA is not enforced for privileged roles. | **Open** |
+| P1-A | **Approvals can be requested but never resolved.** `issueRefund` and `submitRequisition` call `requestApproval()`; there is no approvals inbox, `resolveApproval()` and `approveRefund()` have no caller, so a requested refund never executes. | **Open** |
+| P1-D | **Mark import bypasses `saveMarks` rules.** It checks `exams.enter` for the campus but not that the plan is open or that the user is the subject's assigned teacher, so it can change marks that the normal entry path would refuse. | **Open** |
+| P1-B | **No school-owner user or role management.** Only platform operators create users, assign roles and run "ensure school roles". | **Open** |
+| P1-C | **Staff cannot submit leave requests**, safeguarding cases cannot be opened or read in detail, health records cannot be created, trips cannot be recorded, inventory cannot be created or requisitioned, library reservations and renewals do not exist, student documents cannot be registered, bank statements cannot be imported or matched. | **Open** |
+
+### Recommended immediate order (supersedes §7)
+
+0. **Enforce two-factor at sign-in (P0-8)** and make mark import follow the `saveMarks` rules (P1-D): both are small and security-relevant.
+1. **Make a new school usable (P0-7):** fix the provisioning wizard; add screens for academic years, terms, grades, sections, subjects, grade scales, assessment plans, attendance codes, leave types, departments, positions and rooms; wire the existing campus-clone logic.
+2. **Approvals inbox (P1-A)** so refunds and requisitions can complete.
+3. **Build the screens for logic that is already written (P1-C):** leave requests, safeguarding case pages, health records and incidents, transport fleet and trips, inventory, library reservations, student documents, bank import and matching, competency ratings, timetable slots, separation checklists.
+4. **School-owner user and role management (P1-B)** with a permission preview (roadmap A.1).
+5. **Production readiness:** a baseline migration; a CI check that fails on dead internal links and on server actions with no caller, so this class of gap cannot reappear.
+6. Then resume [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) phases B (SaaS billing) and C–G.
+
+---
+
+> **Sections 1–7 below are the 2026-09-11 snapshot, kept for history.** Where they
+> disagree with §0, §0 is current.
 
 ## 1. Executive summary
 
@@ -118,6 +210,17 @@ settings inheritance.
 
 ## 6. Session progress log (append-only, newest first)
 
+### Pass 3 — 2026-11-18, documentation refresh + reachability audit
+
+Triggered by a request to bring the project's markdown documents up to date. While
+verifying claims against the code, found and recorded:
+
+- `npm run build` was failing on a type error in `scripts/seed-hmssb1.ts`; fixed (two-line typing change), build now passes and `tsc` is clean.
+- 31 of 153 server actions have no caller; 4 internal links 404; more than 20 kinds of setup data have no creation path; the provisioning wizard leaves a school without a role, a visible password or a subscription (see §0).
+- The traceability document had marked 34 rows ✅ that were not usable from any screen or did not hold up against the code (31 unwired actions, 4 dead links, MFA never checked at sign-in, mark import skipping rules); they were regraded to 🟡 with notes.
+
+Documents updated: `README.md`, `docs/ARCHITECTURE.md`, `docs/REQUIREMENTS_TRACEABILITY.md`, `docs/FEATURE_REFERENCE.md` (rewritten), this file and `docs/IMPLEMENTATION_ROADMAP.md`. Method for the reachability finding: every exported server action was searched for a caller in `src/`, every internal `href`/`redirect` was matched against the route files, and every Prisma model was searched for a create/upsert call; suspicious results were confirmed by reading the pages.
+
 ### Pass 2 — 2026-09-11, "fix it" (P0 batch + one P1 slice)
 
 **P0 batch — all four closed and verified:**
@@ -166,7 +269,7 @@ audit doc itself was written) and the entitlement-enforcement gap (P0-6).
 
 ---
 
-## 7. Recommended immediate order
+## 7. Recommended immediate order (2026-09-11; superseded by §0)
 
 See `docs/IMPLEMENTATION_ROADMAP.md` for the full phased plan. Immediate next
 steps once this pass is reviewed:

@@ -1,7 +1,9 @@
 # Architecture
 
 This document explains the load-bearing decisions. It is deliberately short;
-the code is the detail.
+the code is the detail. Last reviewed 2026-11-18. For what is built, what is
+missing and what cannot yet be reached from a screen, the source of truth is
+[REQUIREMENTS_TRACEABILITY.md](REQUIREMENTS_TRACEABILITY.md), not this file.
 
 ## 1. One governed codebase (PRD §15.4)
 
@@ -51,6 +53,16 @@ Guards `requireUser`, `requirePermission`, and `assertPermission` protect pages
 and server actions. **Deny by default**: a page requires an explicit permission;
 mutations re-check on the server (IAM-002) — the UI never gates security.
 
+**Default roles.** A school's roles (Organization Owner, Campus Administrator,
+Admissions Officer, Finance Officer, Teacher, Parent / Guardian) are created per
+tenant by a platform operator (`ensureSchoolRoles`); the demo seed also adds a
+Safeguarding Officer. The owner holds `*`. Health and safeguarding permissions
+are deliberately absent from every role except the Safeguarding Officer (and the
+owner's wildcard). Users and role assignments are managed by platform operators
+on the tenant page; there is no school-owner-facing user or role editor yet.
+Some permissions are organization-wide only by design (`integrations.manage`,
+`student.merge`) and are checked with `can()`, not `canForCampus()`.
+
 ## 4. Data model conventions (PRD §14)
 
 - **Immutable ids**: `cuid()` primary keys.
@@ -60,9 +72,14 @@ mutations re-check on the server (IAM-002) — the UI never gates security.
 - **Effective dating**: `Enrollment` (and future assignments) carry
   `startDate`/`endDate` and status, so historical reports use the assignment
   valid at the reporting date.
-- **Append-only finance/results** (planned for FEE/EXM): corrections happen via
-  reversals and new versions, never destructive edits.
-- **Soft delete**: `deletedAt` where retention/audit require it.
+- **Append-only finance/results**: corrections happen via credit notes, refunds
+  and new result versions (`ResultVersion`, `TimetableVersion`), never destructive
+  edits.
+- **Soft delete**: `deletedAt` where retention/audit require it (for example the
+  person row of a merged-away student).
+- **Money** is stored as integer minor units (cents) everywhere; formatting lives
+  in `lib/money.ts`. Fee and payment numbering is sequential per tenant with a
+  configurable prefix (`lib/settings.ts`).
 - **Audit**: `AuditEvent` is append-only and records actor, action, tenant,
   scope, target, outcome, correlation id, and metadata.
 
@@ -106,10 +123,17 @@ feature.
    - **Quiet hours** — a `NotificationSetting` window suppresses external
      delivery unless the caller marks the event `urgent`. In-app delivery is
      unaffected.
+   - **Throttle** — for non-mandatory, non-urgent notices, a recipient who has
+     already had `notifications.throttleMax` successful deliveries on that
+     channel within `notifications.throttleWindowMinutes` (organization
+     settings; default 10 per 60 minutes, 0 disables) is skipped with a logged
+     reason. In-app delivery is unaffected.
    - **Address resolution** — no email/phone on file skips the channel.
-   - **Provider send** — the resolved `NotificationProvider` (EMAIL → SES/
-     Twilio/etc. in production, a console-log stand-in locally) attempts
-     delivery.
+   - **Provider send** — the resolved `NotificationProvider` attempts
+     delivery. Today every provider is a console-log stand-in; real SES/Twilio/FCM
+     implementations are a drop-in replacement. A `SENSITIVE` message never puts
+     its body on an external channel: only a generic "please log in" prompt is
+     sent, and the full text stays in the in-app inbox (NTF-007).
 4. Every attempt — sent, failed, or skipped, with its reason — is written as a
    `DeliveryAttempt` row: provider, recipient, channel, status, correlation id,
    timestamp (NTF-003). Nothing is overwritten; a **retry** appends a new
@@ -120,10 +144,18 @@ feature.
 SES/Twilio/FCM SDKs touches only that file, not the dispatch logic or any
 call site.
 
+**Templates and digest.** `notifyFromTemplate(code, variables, …)` renders a
+`MessageTemplate` (`{{variable}}` placeholders) and then calls `notify()`.
+Templates exist once per language (unique on tenant + code + locale); the
+recipient's language is tried first, then the organization's, then English
+(`lib/locales.ts::pickByLocale`). A daily digest of unread messages is produced by
+the cron endpoint `/api/internal/cron/digest-notifications` (§8).
+
 **Operational surfaces**: `/portal/notifications` (permission
 `notifications.operate`) is the delivery log — filterable by status, with a
-retry action for failed attempts. `/portal/preferences` is self-service: any
-signed-in user manages their own channel opt-outs and quiet-hours window.
+retry action for failed attempts — and `/portal/notifications/templates` manages
+templates. `/portal/preferences` is self-service: any signed-in user manages their
+own channel opt-outs, quiet-hours window and language.
 
 ## 7. Request lifecycle
 
@@ -176,6 +208,25 @@ Stripe/GitHub webhooks. Every attempt, success or failure, is logged as a
 `attempt`) rather than mutating the failed one, mirroring the notification
 service's retry design in §6.
 
+**Inbound payment-gateway webhook** (`/api/webhooks/payments/[tenantSlug]`,
+`lib/gateway-webhooks.ts`) is the inbound counterpart. It has no session or API
+key; it is authenticated only by an HMAC of `"<timestamp>.<raw body>"` with the
+school's own secret, sent as `X-Scholarum-Signature: t=<unix>,v1=<hex>` (5-minute
+tolerance, constant-time compare; note this differs from the outbound header).
+An unknown school, an inactive configuration and a bad signature all return the
+same `401`. Each event is recorded once per `(tenant, provider, eventId)`
+(`GatewayWebhookEvent`) and a payment is additionally de-duplicated on its
+gateway reference, so provider retries never double-post. `payment.succeeded`
+posts a `GATEWAY` receipt and allocates it (the named invoice first, then oldest
+due); `payment.refunded` and `payment.disputed` are logged for human review and
+never reversed automatically, because refunds need approval (IAM-003). The event
+shape is provider-neutral; a real provider needs a small adapter.
+
+**Scheduled jobs** (`/api/internal/cron/*`) are `GET` handlers guarded by
+`Authorization: Bearer $CRON_SECRET` (`lib/cron-auth.ts`), which fails closed
+(`503`) when `CRON_SECRET` is unset. Nothing in the application schedules them;
+an external scheduler must call them.
+
 **Adding a new endpoint**: write the `route.ts`, call `authenticate()` first,
 add the scope to `API_SCOPES` (`lib/api-scopes.ts`) if it's new, and add the
 path to the hand-authored spec at `src/app/api/v1/openapi.json/route.ts` — the
@@ -188,10 +239,92 @@ needs a shared store like Redis behind the same `checkRateLimit` signature for
 a multi-instance deployment), and webhook retry is manual/on-demand rather
 than automatic-with-backoff.
 
-## 9. Deployment posture
+## 9. Authentication and sessions
 
-Local dev uses Docker Postgres (`docker-compose.yml`, host port 5433). The same
-schema/migrations target managed cloud Postgres in production. The later
-local/offline editions (DEP/SYN/LIC) are additive: signed containers, licence
-verification, an outbox + sync layer, and conflict queues — none of which
+Sessions are rows in `Session`. The browser holds only a random token in an
+`httpOnly`, `SameSite=Lax` cookie (`Secure` in production) that expires after
+seven days (`lib/auth.ts`); there is no signing key to manage. Passwords are
+hashed with bcrypt. TOTP two-factor authentication can be enrolled at
+`/portal/settings/security`, but **the sign-in flow does not yet ask for the code**
+(`loginAction` creates the session straight after the password check), so it gives
+no protection today; this is tracked as P0-8 in `FEATURE_GAP_AUDIT.md`.
+
+- **Login throttling** (`lib/login-rate-limit.ts`): 10 attempts per 15 minutes per
+  identifier, in memory.
+- **Breached passwords** (`lib/hibp.ts`): at sign-in the password is checked
+  against Have I Been Pwned with k-anonymity (only the first five characters of
+  the SHA-1 leave the server). The check fails open on timeout or error and sets a
+  cookie that makes the portal show a change-password banner.
+- **Password reset** (`login/forgot-password`, `login/reset-password`): a random
+  single-use token with a one-hour life is stored on the user row. The response is
+  identical whether or not the email is registered, and every session of that user
+  is deleted when the password changes.
+- **Impersonation**: a platform operator's session is swapped for the target's
+  while the operator's own is kept in a second cookie; a banner is always shown and
+  start and end are audited against the real actor.
+- **Suspension** is enforced centrally in `lib/rbac.ts` (`blockedBySuspension`),
+  which `can`, `canForCampus` and the guards all consult; platform staff are exempt
+  and data is never deleted.
+
+## 10. Audit trail
+
+`AuditEvent` rows are append-only and hash-chained, one chain per tenant plus a
+shared `__platform__` chain. Each row carries `chainKey`, a per-chain `seq`,
+`prevHash` and `entryHash = sha256(canonicalPayload || prevHash)`. `audit()` appends
+inside a Serializable transaction and retries on conflict, so concurrent writers
+cannot fork a chain. `verifyAuditChain()` recomputes a chain and detects edits,
+reordering and deletion; `npm run audit:verify` checks every chain and
+`npm run audit:backfill` chains older rows. This makes tampering evident but does
+not prevent it: the application never updates or deletes audit rows, yet there is
+no database-level trigger or grant that enforces that.
+
+## 11. Localization
+
+Languages are listed in `lib/locales.ts`. UI text is keyed by its English source
+string and translated by `translator(locale)` (`lib/i18n.ts`, dictionaries in
+`i18n-pages.ts` and `i18n-dashboards.ts`); a missing key or locale returns the
+English text, so screens are translated one at a time, and `{placeholders}` are
+substituted in either case. The locale is the user's own choice (`User.locale`),
+else the organization's (`Tenant.locale`), else English. Arabic switches the layout
+to right-to-left. Translations are machine-drafted and need native review.
+
+## 12. Destructive operations
+
+Anything that deletes or rewrites rows follows one pattern (see
+`lib/student-merge.ts`): a dry-run preview of what will move and what blocks; an
+organization-wide-only permission; blockers for cases that cannot be resolved
+automatically (health data is never discarded); unique-key clashes resolved in
+favour of the surviving row; a check inside the transaction that nothing is still
+attached before a cascading delete; a soft delete of the identity row; and an audit
+entry that carries the reason and the counts. Tenant deletion (TEN-006) follows the
+same spirit: the tenant must be closed, a data export recorded as evidence, the slug
+typed to confirm, and the deletion audited before it runs.
+
+## 13. Deployment posture
+
+Local dev uses Docker Postgres (`docker-compose.yml`, host port 5433). In
+development the schema is applied with `prisma db push`. The checked-in
+`prisma/migrations` stop at 11 September 2026 and no longer match
+`schema.prisma`, so **a fresh baseline migration is required before a production
+deployment**. The variables the code reads are `DATABASE_URL`, `CRON_SECRET`,
+`NEXT_PUBLIC_BASE_URL` and `NODE_ENV`.
+
+State that is per process today: the API and login rate limiters. Outbound calls
+the application makes by itself: webhook deliveries and the breached-password
+check. External schedulers are needed for the two cron endpoints, and real
+notification providers must replace the console stand-ins.
+
+The later local/offline editions (DEP/SYN/LIC) are additive: signed containers,
+licence verification, an outbox + sync layer, and conflict queues — none of which
 require changing the domain model.
+
+## 14. Known structural gaps
+
+As of 2026-11-18, several workflows exist as server logic with no screen that
+calls them, a few links point at pages that were never built, and many kinds of
+setup data (academic years, grades, sections, subjects, positions, routes,
+inventory items and more) can only be created by the seed. A school provisioned
+through the platform console is therefore an empty shell. The full list is the
+"Reachability gaps" section of [REQUIREMENTS_TRACEABILITY.md](REQUIREMENTS_TRACEABILITY.md).
+The working rule going forward: a feature is not done until a screen calls its
+action.

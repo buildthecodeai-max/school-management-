@@ -1,7 +1,9 @@
 # Implementation Roadmap — Scholarum
 
-Companion to `FEATURE_GAP_AUDIT.md`. Sequenced so that platform-safety and
-recoverability come before feature volume. Each slice is bounded, reuses the
+Companion to `FEATURE_GAP_AUDIT.md`. Written 2026-09-11; status column and Phase J
+added 2026-11-18 (the phase and slice descriptions below are otherwise the original
+plan). Sequenced so that platform-safety and recoverability come before feature
+volume. Each slice is bounded, reuses the
 existing architecture, and ends with tests + `npm run build` green before the
 next slice starts.
 
@@ -10,6 +12,94 @@ validation · deny-by-default authz · audit on sensitive/financial/academic/
 config/export actions · transaction + idempotency where replay could harm ·
 positive + negative (unauthorized / cross-tenant / cross-campus) tests · update
 the matrix in `FEATURE_GAP_AUDIT.md` only after acceptance evidence exists.
+
+---
+
+## Status — 2026-11-18
+
+Legend: ✅ done and usable · 🟡 partly done (see note) · ⬜ not started. "Done" follows
+the audit's rule: a user can reach it from a screen. Items rated 🟡 because logic
+exists without a screen are covered by Phase J.
+
+| Slice | Status | Note |
+| --- | --- | --- |
+| 0.1 git + migrations | 🟡 | Git history exists and is on GitHub. Migrations not adopted; a baseline is needed before production |
+| 0.2 integration harness | ✅ | `tests/integration/`, 29 tests, single-threaded config |
+| 0.3 cross-tenant isolation suite | 🟡 | `isolation.test.ts` plus search, campus-switch and merge suites; not yet table-driven across every action and API route |
+| 0.4 cross-campus isolation suite | ✅ | Search and campus-switch regressions locked in |
+| 0.5 audit hardening | 🟡 | Hash chain, verification script, backfill done. No database-level UPDATE/DELETE block; read-audit events not added |
+| A.1 effective-access report / role editor | ⬜ | |
+| A.2 negative-endpoint matrix | ⬜ | |
+| A.3 generalized maker-checker | 🟡 | `lib/approvals.ts` used by refunds and requisitions, but no approvals inbox and no policy table |
+| A.4 MFA enforcement | 🟡 | TOTP enrolment works, but the code is never asked for at sign-in, for anyone (see J.0) |
+| A.5 org→campus settings | ✅ | |
+| A.6 tenant offboarding | ✅ | Export, scheduled deletion with evidence gate, hard delete |
+| B.1 entitlement enforcement | 🟡 | Enforced when creating enrollments; not audited across every create path |
+| B.2 plan versioning | 🟡 | `PlanVersion` exists; pinning of subscribers not verified |
+| B.3–B.6, B.8–B.9 usage metering, lifecycle, SaaS ledger, dunning, overrides, commercial reports | ⬜ | |
+| B.7 billing portal | 🟡 | Read-only page; no upgrade or payment flow |
+| C.1 numbering + document templates | 🟡 | Numbering prefixes are settings; notification templates exist; document templates (report card, invoice, transcript) not built |
+| C.2 import center v2 | 🟡 | Students and marks CSV with preview and all-or-nothing commit; no mapping profiles, resumability or other entity types |
+| C.3 SIS relationship enforcement | 🟡 | Flags editable; enforcement not verified |
+| C.4 bulk update safety | 🟡 | Grade promotion with preview; no rollback; reassign-section has no screen |
+| C.5 staff attendance + ingestion | 🟡 | Staff attendance screen done; no device or file ingestion |
+| C.6 attendance analytics | 🟡 | Analytics page with chronic-absence flags; no CSV compliance export |
+| C.7 mark import | ✅ | |
+| C.8 fee adjustments + plans | 🟡 | Credit notes, write-offs, payment plans done; refunds stuck without approvals |
+| C.9 fee reports | ✅ | |
+| C.10 effective-dated fee rules | ⬜ | |
+| D.1 lesson plans and coverage | 🟡 | Lesson plans and homework done; coverage view not built |
+| D.2 electives | ⬜ | |
+| D.3 exam scheduling polish | 🟡 | Rooms, invigilators, conflicts, seating done; accommodations not built |
+| D.4 report-card templates | ⬜ | Competency ratings exist only as unwired logic |
+| D.5 timetable substitutions | 🟡 | Substitute assignment done; depends on timetable slots that no screen can create |
+| E.1 announcement composer | ⬜ | `portal/messages` is a read-only inbox |
+| E.2 events / notices / newsletters | 🟡 | Calendar events only |
+| E.3 forms / surveys / consent | ⬜ | |
+| E.4 emergency broadcast | ⬜ | `notify()` already supports `urgent`; no composer |
+| E.5 student portal, E.7 applicant/alumni portals, E.8 service requests | ⬜ | |
+| E.6 guardian child switcher | ⬜ | Guardian dashboard lists all children on one page |
+| E.9 notification template management | ✅ | UI, per-language versions, live preview; no test-send or versioning |
+| E.10 delivery-log operator view | ✅ | Filter by status and retry; no CSV export |
+| F HR recruitment (HRM-002) | ✅ | Internal tracking with hire-to-staff (phase 20) |
+| F other (shifts, payroll lock, performance, library renewal, transport compliance, inventory counts, medication log, help content) | ⬜ | Payroll runs and posting exist |
+| G.1 report framework | 🟡 | Three reports with scope-aware filters |
+| G.2 metric registry, G.4–G.6 consolidated/sensitive/scheduled reports | ⬜ | |
+| G.3 export jobs | 🟡 | Synchronous CSV and XLSX; print view for PDF; no async jobs or signed URLs |
+| G.7 API expansion + versioning | 🟡 | `/api/v1` slice (students, attendance sessions); no OAuth, sandbox or deprecation policy |
+| G.8 webhook ordering and replay | ⬜ | Manual redeliver exists |
+| H Local / hybrid / licensing / mobile | ⬜ | No design documents written |
+| I Homeschool | ⬜ | Blocked on the scope decision |
+| NFR evidence track | ⬜ | Tests exist; no load, accessibility, restore or observability evidence |
+| *Not in the original plan:* inbound payment-gateway webhook, notification localization, per-recipient throttle, portal translation, student-record merge, password reset, HIBP check | ✅ | Phases 11–19 |
+
+---
+
+## Phase J — Close the reachability gaps (recommended next)
+
+Added 2026-11-18. The audit found server logic with no screen, dead links, and setup
+data with no creation path (see the "Reachability gaps" section of
+`REQUIREMENTS_TRACEABILITY.md`). These slices make existing work usable, so they
+come before new feature volume. Each ends with the screen reachable, a permission
+check on the server, an audit entry, and a negative test.
+
+| Slice | What | Unblocks |
+| --- | --- | --- |
+| J.0 | **Enforce two-factor at sign-in.** Add a challenge step between the password check and session creation for users with MFA enrolled; require enrolment for platform staff and organization owners; recovery procedure. Also make mark import follow the `saveMarks` rules (plan open, assigned teacher). | SEC-002, A.4, EXM-003 |
+| J.1 | **Make a new school usable.** Fix the provisioning wizard (role name `Campus Admin` vs `Campus Administrator`, show or email the temporary password, create a subscription from the chosen plan). Create standard roles at provisioning. | TEN-004, P0-7 |
+| J.2 | **Setup-data screens.** Academic years and terms, grade levels, sections, subjects, grade scales, assessment plans and components, attendance codes, leave types and balances, departments and positions, rooms. Wire the existing `cloneCampusConfig` with its preview. Make the Setup checklist items link to these. | CFG-001/002, ACD-001, EXM-001, HR-staff, ATT-005 |
+| J.3 | **Approvals inbox.** List pending approval requests for the approver, approve or reject with a reason, execute the approved action (`approveRefund`, requisition approval); notify the requester. | IAM-003, FEE-004, INV-req |
+| J.4 | **Leave requests and separations.** Staff submit leave requests; HR initiates separation checklists. | ATT-005, HR-leave, HR-separation |
+| J.5 | **Safeguarding and health screens.** Case detail page (`/portal/safeguarding/[id]`), open case, add note, close case; edit health record; report incident. | SAF-case, HLT-record, HLT-incident |
+| J.6 | **Transport screens.** Create vehicles, routes, stops and assignments; the trip recording page (`/portal/transport/trip`). | TRP-fleet, TRP-trip, TRP-notify |
+| J.7 | **Inventory screens.** Items, categories, warehouses, suppliers; stock adjustment; the requisition form (`/portal/inventory/requisition/new`); purchase orders; asset assignment. | INV-stock, INV-req, INV-po, INV-asset |
+| J.8 | **Library reservations and renewals.** | LIB-reserve, LIB-circ |
+| J.9 | **Student records.** Register documents (feeds the expiry cron); bulk reassign section; assign a fee structure or discount to a student; use pickers instead of typed record ids on the bulk and issue forms. | SIS-004, SIS-005, FEE-001 |
+| J.10 | **Bank reconciliation.** Import a statement; match, unmatch and exception queue. | FEE-003, FEE-005 |
+| J.11 | **Assessment gaps.** Competency and conduct ratings; the timetable slot editor (`/portal/academics/timetable/[id]/slot/new`) so conflict detection is reachable. | EXM-005, ACD-002 |
+| J.12 | **School-owner user and role management** with a permission preview and an effective-access report. | IAM-001, A.1 |
+| J.13 | **Regression guards.** A test that fails when an internal link points at a route that does not exist, and a script that fails CI when an exported server action has no caller. | Prevents recurrence |
+| J.14 | **Production readiness.** Baseline migration from the current schema; switch deployment to `prisma migrate deploy`. | P0-1, 0.1 |
 
 ---
 
@@ -161,8 +251,9 @@ Plus SEC operational evidence: config/at-rest scans (SEC-001), env separation re
 
 ## Suggested navigation (Phase 24 — evaluate, don't force)
 
-Current single flat sidebar works but is long (19 items). When Reports and
-Communications land, consider grouping — **without renaming routes**:
+Current single flat sidebar works but is long (26 entries, 3 of them platform-only;
+it was 19 on 2026-09-11). Reports, Calendar, Certificates and Hostel have since been
+added. Consider grouping — **without renaming routes**:
 
 ```
 DASHBOARD

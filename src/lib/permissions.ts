@@ -88,6 +88,8 @@ export const PERMISSIONS = {
   "hr.review.read": "View performance reviews",
   "hr.review.write": "Create and edit performance reviews",
   "hr.separation.manage": "Manage staff separation checklists",
+  "hr.recruit.read": "View job openings and applicants",
+  "hr.recruit.write": "Manage job openings, move applicants through stages and hire",
 
   // Library module (B2)
   "library.read": "View library catalog and loans",
@@ -202,7 +204,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
     keys: [
       "hr.staff.read", "hr.staff.write", "hr.leave.read", "hr.leave.approve",
       "hr.payroll.read", "hr.payroll.write", "hr.review.read", "hr.review.write",
-      "hr.separation.manage",
+      "hr.separation.manage", "hr.recruit.read", "hr.recruit.write",
     ],
   },
   {

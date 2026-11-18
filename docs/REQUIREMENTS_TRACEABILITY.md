@@ -7,7 +7,7 @@ Per PRD Appendix A, a requirement is "complete" only with acceptance evidence
 attached and approved. The ✅ marks below mean *implemented and manually
 exercised*, not formally accepted.
 
-Last updated: Phase 19 complete (dashboard translation). All non-deferred requirements implemented.
+Last updated: Phase 20 complete (HR recruitment tracking). All non-deferred requirements implemented.
 New in phase 6: ADM-006 (student lifecycle UI), SIS-004/005, EXM-002/005, FEE-003/005/007, INV-po/asset, TRP-notify.
 New in phase 7: LIB-reserve (reserve/fulfill/cancel), FEE-007 download Route Handler (`api/portal/fees/gl-export`), EXM-002 scheduling UI (`portal/exams/schedule/new`), CFG-002 campus template clone with preview (`portal/setup/clone-actions.ts`), BRN-006 confirmed ✅.
 New in phase 8: NTF-002 template management UI (`portal/notifications/templates`); UX-003 search page already wired; UX-006 campus preference wired into library/HR/transport/inventory/health/safeguarding pages via `resolveCampusId()`.
@@ -114,7 +114,7 @@ Bank import (FEE-003/005) and GL export (FEE-007) are implemented.
 | HR-leave | Leave requests, balances, approval queue | ✅ | Shared `LeaveType`/`LeaveBalance`/`LeaveRequest` with ATT-005; `approveLeaveHr` action; notify on decision |
 | HR-payroll | Payroll data entry (not calculation engine) | ✅ | `PayrollInput` model; `recordPayrollInput` action (amounts in cents) |
 | HR-separation | Separation checklists | ✅ | `SeparationChecklist` with default 5-item checklist; `initiateSeparation` action |
-| HR-recruit | Recruitment/applicant tracking | ⬜ | Deferred — would duplicate admissions pipeline for low unique value |
+| HR-recruit | Recruitment/applicant tracking | ✅ | `portal/hr/recruitment` — `JobOpening`/`JobApplicant`/`JobApplicantEvent`; stage pipeline (Applied → Screening → Interview → Offer, Rejected/Withdrawn) with history; `hr.recruit.read`/`write` permissions; Hire (Offer stage only, also needs `hr.staff.write`) creates Person + Staff + EmploymentRecord in one transaction and auto-fills the opening at headcount; applicant data included in the tenant export. Internal entry only — a public careers page is not built (needs CAPTCHA/rate-limiting) |
 
 ## §7.9 Library
 | ID | Requirement | Status | Where |
@@ -224,7 +224,7 @@ Safeguarding. Dedicated `safeguardingOfficerRole` seeded for demo.
 | CFG-003 generic custom-status/workflow engine | Kept as hardcoded enums; no business case for generic engine yet |
 | BRN campus merge | High risk, low frequency |
 | Student-record merge (ADM-006) | ✅ phase 17 — `lib/student-merge.ts` + `portal/students/[id]/merge`: dry-run preview, `student.merge` permission (org-wide), blocks on two active enrollments or two health records, keeper wins on unique clashes, verifies nothing is left before the cascading delete, audited. Limitation: historical transport trip-attendance JSON still holds the old student id |
-| HR recruitment/applicant tracking | Would duplicate the admissions pipeline for low unique value |
+| Public careers page for applicants | Recruitment tracking ✅ phase 20 (internal entry). A public application form would be an unauthenticated write endpoint and needs bot protection/rate limiting first |
 | SIS-004 cron scheduler invocation | `getExpiringDocuments` + cron route ✅; actual cron trigger is external infra (Vercel Cron / OS cron) — documented external dependency |
 | Portal UI translation beyond shell, account, students, attendance, fees and the staff/guardian/finance/admissions dashboards | Those screens ✅ phases 16–19 in es/fr/pt/ar (RTL for ar); shell + account also in sw/hi (`lib/i18n.ts`, `i18n-pages.ts`, `i18n-dashboards.ts`, English fallback per string). Remaining pages, the platform dashboard, workflow-stage names (e.g. admissions stages) and sw/hi page bodies are untranslated. Machine-drafted — needs native review |
 | Real-time notification throttle windows | ✅ phase 15 — per-recipient rolling-window cap on non-urgent email/SMS (`notifications.throttleMax` / `throttleWindowMinutes` settings); security, billing and urgent notices exempt; held items remain in the in-app inbox and daily digest |

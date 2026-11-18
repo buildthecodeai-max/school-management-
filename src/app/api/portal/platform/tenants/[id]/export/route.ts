@@ -43,6 +43,8 @@ export async function GET(
     routes,
     inventoryItems,
     safeguardingCases,
+    jobOpenings,
+    jobApplicants,
     auditEvents,
   ] = await Promise.all([
     prisma.campus.findMany({ where: { tenantId } }),
@@ -59,6 +61,8 @@ export async function GET(
     prisma.route.findMany({ where: { tenantId } }),
     prisma.inventoryItem.findMany({ where: { tenantId } }),
     prisma.safeguardingCase.findMany({ where: { tenantId } }),
+    prisma.jobOpening.findMany({ where: { tenantId } }),
+    prisma.jobApplicant.findMany({ where: { tenantId }, include: { events: true } }),
     prisma.auditEvent.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" }, take: 5000 }),
   ]);
 
@@ -82,6 +86,8 @@ export async function GET(
       payments: payments.length,
       attendanceSessions: attendanceSessions.length,
       assessmentPlans: assessmentPlans.length,
+      jobOpenings: jobOpenings.length,
+      jobApplicants: jobApplicants.length,
     },
     data: {
       campuses,
@@ -98,6 +104,8 @@ export async function GET(
       routes,
       inventoryItems,
       safeguardingCases,
+      jobOpenings,
+      jobApplicants,
       auditEvents,
     },
   };

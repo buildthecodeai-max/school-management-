@@ -147,6 +147,7 @@ model Campus {
   timetableVersions TimetableVersion[]
   // Phase 3 back-relations
   departments      Department[]
+  jobOpenings      JobOpening[]
   employmentRecords EmploymentRecord[]
   payrollInputs    PayrollInput[]
   performanceReviews PerformanceReview[]
@@ -2432,6 +2433,7 @@ model Position {
 
   department        Department         @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   employmentRecords EmploymentRecord[]
+  jobOpenings       JobOpening[]
 
   @@index([tenantId])
   @@map("positions")
@@ -3031,4 +3033,88 @@ model GatewayWebhookEvent {
   @@unique([tenantId, provider, eventId])
   @@index([tenantId, receivedAt])
   @@map("gateway_webhook_events")
+}
+
+// ---------------------------------------------------------------------------
+// Recruitment (HR-recruit) — internal opening + applicant tracking. Applicants
+// are not Persons/Users until hired; a hire creates the Staff record.
+// ---------------------------------------------------------------------------
+
+enum JobOpeningStatus {
+  OPEN
+  ON_HOLD
+  CLOSED
+  FILLED
+}
+
+enum ApplicantStage {
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+model JobOpening {
+  id              String           @id @default(cuid())
+  tenantId        String
+  campusId        String
+  positionId      String?
+  title           String
+  description     String?
+  headcount       Int              @default(1)
+  status          JobOpeningStatus @default(OPEN)
+  closesAt        DateTime?
+  createdByUserId String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  campus     Campus         @relation(fields: [campusId], references: [id], onDelete: Cascade)
+  position   Position?      @relation(fields: [positionId], references: [id])
+  applicants JobApplicant[]
+
+  @@index([tenantId, campusId])
+  @@map("job_openings")
+}
+
+model JobApplicant {
+  id        String         @id @default(cuid())
+  tenantId  String
+  openingId String
+  firstName String
+  lastName  String
+  email     String
+  phone     String?
+  source    String?
+  coverNote String?
+  rating    Int?
+  stage     ApplicantStage @default(APPLIED)
+  staffId   String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  opening JobOpening          @relation(fields: [openingId], references: [id], onDelete: Cascade)
+  events  JobApplicantEvent[]
+
+  @@unique([openingId, email])
+  @@index([tenantId, openingId])
+  @@map("job_applicants")
+}
+
+model JobApplicantEvent {
+  id          String          @id @default(cuid())
+  tenantId    String
+  applicantId String
+  fromStage   ApplicantStage?
+  toStage     ApplicantStage
+  note        String?
+  actorUserId String?
+  createdAt   DateTime        @default(now())
+
+  applicant JobApplicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+
+  @@index([applicantId])
+  @@map("job_applicant_events")
 }

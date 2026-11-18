@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type AttendanceCategory } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -147,7 +147,7 @@ async function main() {
   }
 
   // Attendance codes
-  const codeDefs = [
+  const codeDefs: { code: string; label: string; category: AttendanceCategory; countsAsPresent: boolean; notifyGuardian: boolean }[] = [
     { code: "P", label: "Present", category: "PRESENT", countsAsPresent: true, notifyGuardian: false },
     { code: "A", label: "Absent", category: "ABSENT", countsAsPresent: false, notifyGuardian: true },
     { code: "L", label: "Late", category: "LATE", countsAsPresent: true, notifyGuardian: true },

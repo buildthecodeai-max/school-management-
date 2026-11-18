@@ -1,3 +1,4 @@
+import { ctxTranslator } from "@/lib/i18n";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import type { AuthzContext } from "@/lib/rbac";
@@ -11,6 +12,7 @@ export async function GuardianDashboard({
   ctx: AuthzContext;
   guardianId: string;
 }) {
+  const tr = ctxTranslator(ctx);
   const links = await prisma.guardianRelationship.findMany({
     where: { guardianId, tenantId: ctx.tenantId! },
     include: {
@@ -78,14 +80,14 @@ export async function GuardianDashboard({
   return (
     <div>
       <PageHeader
-        title={`Welcome, ${ctx.user.displayName}`}
-        subtitle="Your children's attendance, results and school notices."
+        title={tr("Welcome, {name}", { name: ctx.user.displayName })}
+        subtitle={tr("Your children's attendance, results and school notices.")}
       />
 
       {children.length === 0 ? (
         <Card>
           <p className="text-sm text-[color:var(--color-muted)]">
-            No linked children found on this account.
+            {tr("No linked children found on this account.")}
           </p>
         </Card>
       ) : (
@@ -108,35 +110,35 @@ export async function GuardianDashboard({
                       <p className="text-sm text-[color:var(--color-muted)]">
                         {enr
                           ? `${enr.campus.name} · ${enr.gradeLevel.name} · ${enr.section.name}`
-                          : "Not currently enrolled"}
+                          : tr("Not currently enrolled")}
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {link.isPrimaryContact && <Badge tone="brand">Primary</Badge>}
+                    {link.isPrimaryContact && <Badge tone="brand">{tr("Primary")}</Badge>}
                     {link.financiallyResponsible && (
-                      <Badge tone="sky">Fee payer</Badge>
+                      <Badge tone="sky">{tr("Fee payer")}</Badge>
                     )}
                   </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <StatCard
-                    label="Attendance (30d)"
+                    label={tr("Attendance (30d)")}
                     value={pct === null ? "—" : `${pct}%`}
                     tone={pct !== null && pct < 90 ? "amber" : "green"}
-                    hint={`${total} sessions recorded`}
+                    hint={tr("{n} sessions recorded", { n: total })}
                   />
                   <StatCard
-                    label="Absences (30d)"
+                    label={tr("Absences (30d)")}
                     value={recentAbsences}
                     tone={recentAbsences > 0 ? "amber" : "slate"}
                   />
                   <StatCard
-                    label="Fee balance"
+                    label={tr("Fee balance")}
                     value={formatMoney(feeBalance)}
                     tone={feeBalance > 0 ? "amber" : "green"}
-                    hint={link.financiallyResponsible ? "you are fee payer" : undefined}
+                    hint={link.financiallyResponsible ? tr("you are fee payer") : undefined}
                   />
                 </div>
 
@@ -146,10 +148,10 @@ export async function GuardianDashboard({
                       href={`/portal/exams/${latestResult.version.planId}/report/${link.student.id}`}
                       className="font-medium text-brand-700 hover:underline"
                     >
-                      View report card →
+                      {tr("View report card →")}
                     </Link>
                   ) : (
-                    <span className="text-[color:var(--color-muted)]">No published report card yet</span>
+                    <span className="text-[color:var(--color-muted)]">{tr("No published report card yet")}</span>
                   )}
                 </div>
               </Card>
@@ -160,10 +162,10 @@ export async function GuardianDashboard({
 
       <div className="mt-6">
         <Card>
-          <h3 className="mb-3 font-semibold">Recent notices</h3>
+          <h3 className="mb-3 font-semibold">{tr("Recent notices")}</h3>
           {messages.length === 0 ? (
             <p className="text-sm text-[color:var(--color-muted)]">
-              No messages yet.
+              {tr("No messages yet.")}
             </p>
           ) : (
             <ul className="divide-y divide-[color:var(--color-line)]">

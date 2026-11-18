@@ -1,3 +1,4 @@
+import { ctxTranslator } from "@/lib/i18n";
 import { prisma } from "@/lib/db";
 import type { AuthzContext } from "@/lib/rbac";
 import { allowedCampusIds } from "@/lib/scope";
@@ -6,6 +7,7 @@ import { StatCard, Card, PageHeader, ButtonLink } from "@/components/ui";
 
 export async function FinanceDashboard({ ctx }: { ctx: AuthzContext }) {
   const tenantId = ctx.tenantId!;
+  const tr = ctxTranslator(ctx);
   const campusIds = allowedCampusIds(ctx, "fee.read");
   const campusFilter = campusIds ? { in: campusIds } : undefined;
 
@@ -44,22 +46,22 @@ export async function FinanceDashboard({ ctx }: { ctx: AuthzContext }) {
   return (
     <div>
       <PageHeader
-        title="Finance Dashboard"
-        subtitle="Fee collection and reconciliation overview"
-        action={<ButtonLink href="/portal/fees">Fee management</ButtonLink>}
+        title={tr("Finance Dashboard")}
+        subtitle={tr("Fee collection and reconciliation overview")}
+        action={<ButtonLink href="/portal/fees">{tr("Fee management")}</ButtonLink>}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Outstanding balance" value={formatMoney(openInvoices._sum.balance ?? 0)} tone="amber" hint={`${openInvoices._count.id} open invoice(s)`} />
-        <StatCard label="Overdue invoices" value={overdueCount} tone="sky" hint="past due date" />
-        <StatCard label="Unmatched bank lines" value={reconciliationPending} tone="sky" hint="pending reconciliation" />
+        <StatCard label={tr("Outstanding balance")} value={formatMoney(openInvoices._sum.balance ?? 0)} tone="amber" hint={tr("{n} open invoice(s)", { n: openInvoices._count.id })} />
+        <StatCard label={tr("Overdue invoices")} value={overdueCount} tone="sky" hint={tr("past due date")} />
+        <StatCard label={tr("Unmatched bank lines")} value={reconciliationPending} tone="sky" hint={tr("pending reconciliation")} />
       </div>
 
       <div className="mt-6">
         <Card>
-          <h3 className="mb-3 font-semibold">Recent billing runs</h3>
+          <h3 className="mb-3 font-semibold">{tr("Recent billing runs")}</h3>
           {recentRuns.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-muted)]">No billing runs yet.</p>
+            <p className="text-sm text-[color:var(--color-muted)]">{tr("No billing runs yet.")}</p>
           ) : (
             <ul className="divide-y divide-[color:var(--color-line)]">
               {recentRuns.map((r) => (
@@ -68,14 +70,14 @@ export async function FinanceDashboard({ ctx }: { ctx: AuthzContext }) {
                     <span className="font-medium">{r.periodLabel}</span>
                     <span className="ml-2 text-[color:var(--color-muted)]">{campusNameMap.get(r.campusId) ?? r.campusId}</span>
                   </div>
-                  <span>{r.invoiceCount} invoice(s) · {formatMoney(r.totalAmount)}</span>
+                  <span>{tr("{n} invoice(s)", { n: r.invoiceCount })} · {formatMoney(r.totalAmount)}</span>
                 </li>
               ))}
             </ul>
           )}
           <div className="mt-3 flex gap-2">
-            <ButtonLink href="/portal/fees/reconciliation" variant="ghost">Bank reconciliation</ButtonLink>
-            <ButtonLink href="/portal/fees/journal" variant="ghost">GL journal export</ButtonLink>
+            <ButtonLink href="/portal/fees/reconciliation" variant="ghost">{tr("Bank reconciliation")}</ButtonLink>
+            <ButtonLink href="/portal/fees/journal" variant="ghost">{tr("GL journal export")}</ButtonLink>
           </div>
         </Card>
       </div>

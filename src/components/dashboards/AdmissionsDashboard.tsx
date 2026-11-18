@@ -1,3 +1,4 @@
+import { ctxTranslator } from "@/lib/i18n";
 import { prisma } from "@/lib/db";
 import type { AuthzContext } from "@/lib/rbac";
 import { allowedCampusIds } from "@/lib/scope";
@@ -5,6 +6,7 @@ import { StatCard, Card, PageHeader, ButtonLink, Badge } from "@/components/ui";
 
 export async function AdmissionsDashboard({ ctx }: { ctx: AuthzContext }) {
   const tenantId = ctx.tenantId!;
+  const tr = ctxTranslator(ctx);
   // Match the campus scoping the pipeline page applies, so a campus-scoped
   // officer's dashboard totals cover the same applications the list shows.
   const campusIds = allowedCampusIds(ctx, "admissions.read");
@@ -31,22 +33,22 @@ export async function AdmissionsDashboard({ ctx }: { ctx: AuthzContext }) {
   return (
     <div>
       <PageHeader
-        title="Admissions Dashboard"
-        subtitle="Application pipeline overview"
-        action={<ButtonLink href="/portal/admissions">View pipeline</ButtonLink>}
+        title={tr("Admissions Dashboard")}
+        subtitle={tr("Application pipeline overview")}
+        action={<ButtonLink href="/portal/admissions">{tr("View pipeline")}</ButtonLink>}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Active applications" value={total} tone="sky" hint="excluding withdrawn" />
-        <StatCard label="Awaiting interview" value={interviewStage} tone="amber" hint="in interview stage" />
-        <StatCard label="Offers out" value={offerStage} tone="green" hint="pending acceptance" />
+        <StatCard label={tr("Active applications")} value={total} tone="sky" hint={tr("excluding withdrawn")} />
+        <StatCard label={tr("Awaiting interview")} value={interviewStage} tone="amber" hint={tr("in interview stage")} />
+        <StatCard label={tr("Offers out")} value={offerStage} tone="green" hint={tr("pending acceptance")} />
       </div>
 
       <div className="mt-6">
         <Card>
-          <h3 className="mb-3 font-semibold">Pipeline by stage</h3>
+          <h3 className="mb-3 font-semibold">{tr("Pipeline by stage")}</h3>
           {stageCounts.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-muted)]">No active applications.</p>
+            <p className="text-sm text-[color:var(--color-muted)]">{tr("No active applications.")}</p>
           ) : (
             <ul className="divide-y divide-[color:var(--color-line)]">
               {stageCounts.map((s) => (
@@ -62,9 +64,9 @@ export async function AdmissionsDashboard({ ctx }: { ctx: AuthzContext }) {
 
       <div className="mt-4">
         <Card>
-          <h3 className="mb-3 font-semibold">Recent applications</h3>
+          <h3 className="mb-3 font-semibold">{tr("Recent applications")}</h3>
           {recentApps.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-muted)]">None.</p>
+            <p className="text-sm text-[color:var(--color-muted)]">{tr("None.")}</p>
           ) : (
             <ul className="divide-y divide-[color:var(--color-line)]">
               {recentApps.map((a) => (

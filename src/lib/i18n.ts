@@ -1,5 +1,6 @@
 import { isSupportedLocale } from "./locales";
 import { EXTRA } from "./i18n-pages";
+import { DASHBOARDS } from "./i18n-dashboards";
 
 // Portal UI translations, keyed by the English source string. A missing
 // locale or missing key falls back to English, so screens can be translated
@@ -65,7 +66,7 @@ const ar: Dict = {
 
 const BASE: Record<string, Dict> = { es, fr, pt, ar };
 const DICTS: Record<string, Dict> = Object.fromEntries(
-  Object.keys({ ...BASE, ...EXTRA }).map((l) => [l, { ...BASE[l], ...EXTRA[l] }]),
+  Object.keys({ ...BASE, ...EXTRA, ...DASHBOARDS }).map((l) => [l, { ...BASE[l], ...EXTRA[l], ...DASHBOARDS[l] }]),
 );
 const RTL = new Set(["ar"]);
 

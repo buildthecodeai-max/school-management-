@@ -1,3 +1,4 @@
+import { ctxTranslator } from "@/lib/i18n";
 import { prisma } from "@/lib/db";
 import type { AuthzContext } from "@/lib/rbac";
 import { allowedCampusIds } from "@/lib/scope";
@@ -17,6 +18,7 @@ function endOfToday() {
 
 export async function StaffDashboard({ ctx }: { ctx: AuthzContext }) {
   const tenantId = ctx.tenantId!;
+  const tr = ctxTranslator(ctx);
   const campusIds = allowedCampusIds(ctx, "student.read"); // null = all
 
   const campusFilter = campusIds ? { in: campusIds } : undefined;
@@ -70,45 +72,45 @@ export async function StaffDashboard({ ctx }: { ctx: AuthzContext }) {
   return (
     <div>
       <PageHeader
-        title="Dashboard"
-        subtitle={`${ctx.user.tenant?.name ?? ""} · organization overview`}
+        title={tr("Dashboard")}
+        subtitle={tr("{name} · organization overview", { name: ctx.user.tenant?.name ?? "" })}
         action={
-          <ButtonLink href="/portal/attendance">Take attendance</ButtonLink>
+          <ButtonLink href="/portal/attendance">{tr("Take attendance")}</ButtonLink>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Active enrollments"
+          label={tr("Active enrollments")}
           value={studentCount}
-          hint={`across ${campusCount} campus${campusCount === 1 ? "" : "es"}`}
+          hint={tr(campusCount === 1 ? "across {n} campus" : "across {n} campuses", { n: campusCount })}
         />
         <StatCard
-          label="Registers today"
+          label={tr("Registers today")}
           value={sessionsToday.length}
           tone="sky"
-          hint={`${submitted} submitted · ${pending} pending`}
+          hint={tr("{submitted} submitted · {pending} pending", { submitted, pending })}
         />
         <StatCard
-          label="Absences & lates today"
+          label={tr("Absences & lates today")}
           value={absentRecords}
           tone="amber"
-          hint="qualifying guardian alerts"
+          hint={tr("qualifying guardian alerts")}
         />
         <StatCard
-          label="Campuses"
+          label={tr("Campuses")}
           value={campusCount}
           tone="green"
-          hint="active operating units"
+          hint={tr("active operating units")}
         />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-3 font-semibold">Today&apos;s registers</h3>
+          <h3 className="mb-3 font-semibold">{tr("Today's registers")}</h3>
           {sessionsToday.length === 0 ? (
             <p className="text-sm text-[color:var(--color-muted)]">
-              No attendance registers have been opened today.
+              {tr("No attendance registers have been opened today.")}
             </p>
           ) : (
             <ul className="divide-y divide-[color:var(--color-line)]">
@@ -127,7 +129,7 @@ export async function StaffDashboard({ ctx }: { ctx: AuthzContext }) {
                           : "amber"
                     }
                   >
-                    {s.status}
+                    {tr(s.status)}
                   </Badge>
                 </li>
               ))}
@@ -136,24 +138,23 @@ export async function StaffDashboard({ ctx }: { ctx: AuthzContext }) {
         </Card>
 
         <Card>
-          <h3 className="mb-3 font-semibold">Quick actions</h3>
+          <h3 className="mb-3 font-semibold">{tr("Quick actions")}</h3>
           <div className="flex flex-wrap gap-2">
             <ButtonLink href="/portal/students" variant="ghost">
-              View students
+              {tr("View students")}
             </ButtonLink>
             <ButtonLink href="/portal/attendance" variant="ghost">
-              Attendance
+              {tr("Attendance")}
             </ButtonLink>
             <ButtonLink href="/portal/academics" variant="ghost">
-              Academics
+              {tr("Academics")}
             </ButtonLink>
             <ButtonLink href="/portal/campuses" variant="ghost">
-              Campuses
+              {tr("Campuses")}
             </ButtonLink>
           </div>
           <p className="mt-4 text-xs text-[color:var(--color-muted)]">
-            Actions are filtered by your role and campus scope. You only see
-            data for campuses you are assigned to.
+            {tr("Actions are filtered by your role and campus scope. You only see data for campuses you are assigned to.")}
           </p>
         </Card>
       </div>

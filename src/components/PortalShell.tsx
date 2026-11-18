@@ -38,6 +38,7 @@ import { can } from "@/lib/rbac";
 import { destroySession, endImpersonation, getSessionUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import type { PermissionKey } from "@/lib/permissions";
+import { resolveUiLocale, textDirection, translator } from "@/lib/i18n";
 
 async function logoutAction() {
   "use server";
@@ -218,6 +219,8 @@ export async function PortalShell({
   children: ReactNode;
 }) {
   const user = ctx.user;
+  const locale = resolveUiLocale(user.locale, user.tenant?.locale);
+  const tr = translator(locale);
   const items = NAV.filter((item) => {
     if (item.platformOnly) return ctx.isPlatformStaff;
     // Tenant-scoped destinations are unreachable without a tenant row, so
@@ -257,7 +260,7 @@ export async function PortalShell({
   const showBreachWarning = jar.get("sms_pwd_breach")?.value === "1";
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" dir={textDirection(locale)} lang={locale}>
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-[color:var(--color-line)] bg-white md:flex">
         <div className="flex h-16 items-center gap-2 border-b border-[color:var(--color-line)] px-5">
@@ -274,7 +277,7 @@ export async function PortalShell({
               className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700"
             >
               {item.icon}
-              {item.label}
+              {tr(item.label)}
             </Link>
           ))}
         </nav>
@@ -285,7 +288,7 @@ export async function PortalShell({
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-red-50 hover:text-red-700"
             >
               <LogOut size={18} />
-              Sign out
+              {tr("Sign out")}
             </button>
           </form>
         </div>
@@ -299,7 +302,7 @@ export async function PortalShell({
             <Building2 size={16} className="shrink-0 text-brand-600" />
             <span className="truncate font-medium">{contextLabel}</span>
             {ctx.isPlatformStaff && ctx.tenantId && (
-              <form action={leaveOrganization}><button className="text-sm text-brand-700 underline">Return to platform</button></form>
+              <form action={leaveOrganization}><button className="text-sm text-brand-700 underline">{tr("Return to platform")}</button></form>
             )}
             {ctx.isPlatformStaff && ctx.tenantId && (
               <Link href={`/portal/platform/tenants/${ctx.tenantId}`} className="text-sm text-brand-700 underline">Users and roles / change campus</Link>
@@ -314,7 +317,7 @@ export async function PortalShell({
             )}
             {ctx.tenantId && switchableCampuses.length === 0 && (
               <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
-                no campus access
+                {tr("no campus access")}
               </span>
             )}
           </div>
@@ -328,7 +331,7 @@ export async function PortalShell({
                   id="global-search"
                   name="q"
                   type="search"
-                  placeholder="Search…"
+                  placeholder={tr("Search…")}
                   aria-label="Search students, staff and applicants"
                   className="w-44 rounded-md border border-[color:var(--color-line)] px-3 py-1.5 text-sm outline-none transition focus:w-60 focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                 />
@@ -339,10 +342,10 @@ export async function PortalShell({
                 {user.displayName}
               </p>
               <p className="text-xs text-[color:var(--color-muted)]">
-                {roleNames || "No role"}
+                {roleNames || tr("No role")}
               </p>
             </Link>
-            <Link href="/portal/account" aria-label="Account settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 hover:bg-brand-200 transition">
+            <Link href="/portal/account" aria-label={tr("Account settings")} className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700 hover:bg-brand-200 transition">
               {user.displayName.slice(0, 1).toUpperCase()}
             </Link>
           </div>

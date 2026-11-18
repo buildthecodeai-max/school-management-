@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/rbac";
 import { PageHeader, Card } from "@/components/ui";
+import { resolveUiLocale, translator } from "@/lib/i18n";
 
 export default async function AccountPage() {
   const ctx = await requireUser();
   const { user } = ctx;
+  const tr = translator(resolveUiLocale(user.locale, user.tenant?.locale));
 
   const roleNames = [
     ...new Set(user.roleAssignments.map((a) => a.role.name)),
@@ -12,7 +14,7 @@ export default async function AccountPage() {
 
   return (
     <div className="mx-auto max-w-lg">
-      <PageHeader title="My account" subtitle={user.email} />
+      <PageHeader title={tr("My account")} subtitle={user.email} />
 
       <Card className="mb-4 p-5">
         <div className="flex items-center gap-4">
@@ -32,16 +34,16 @@ export default async function AccountPage() {
           href="/portal/account/password"
           className="flex items-center justify-between rounded-lg border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-5 py-4 text-sm font-medium hover:bg-brand-50"
         >
-          <span>Change password</span>
+          <span>{tr("Change password")}</span>
           <span className="text-[color:var(--color-muted)]">→</span>
         </Link>
         <Link
           href="/portal/settings/security"
           className="flex items-center justify-between rounded-lg border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-5 py-4 text-sm font-medium hover:bg-brand-50"
         >
-          <span>Two-factor authentication</span>
+          <span>{tr("Two-factor authentication")}</span>
           <span className="text-sm text-[color:var(--color-muted)]">
-            {user.mfaEnabled ? "Enabled →" : "Not enabled →"}
+            {tr(user.mfaEnabled ? "Enabled →" : "Not enabled →")}
           </span>
         </Link>
         {ctx.tenantId && (
@@ -49,7 +51,7 @@ export default async function AccountPage() {
             href="/portal/preferences"
             className="flex items-center justify-between rounded-lg border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-5 py-4 text-sm font-medium hover:bg-brand-50"
           >
-            <span>Notification preferences</span>
+            <span>{tr("Notification preferences")}</span>
             <span className="text-[color:var(--color-muted)]">→</span>
           </Link>
         )}
@@ -58,7 +60,7 @@ export default async function AccountPage() {
             href="/portal/messages"
             className="flex items-center justify-between rounded-lg border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-5 py-4 text-sm font-medium hover:bg-brand-50"
           >
-            <span>Message inbox</span>
+            <span>{tr("Message inbox")}</span>
             <span className="text-[color:var(--color-muted)]">→</span>
           </Link>
         )}

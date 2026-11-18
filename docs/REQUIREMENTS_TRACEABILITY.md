@@ -7,7 +7,7 @@ Per PRD Appendix A, a requirement is "complete" only with acceptance evidence
 attached and approved. The ✅ marks below mean *implemented and manually
 exercised*, not formally accepted.
 
-Last updated: Phase 15 complete (notification throttling). All non-deferred requirements implemented.
+Last updated: Phase 16 complete (portal shell translation). All non-deferred requirements implemented.
 New in phase 6: ADM-006 (student lifecycle UI), SIS-004/005, EXM-002/005, FEE-003/005/007, INV-po/asset, TRP-notify.
 New in phase 7: LIB-reserve (reserve/fulfill/cancel), FEE-007 download Route Handler (`api/portal/fees/gl-export`), EXM-002 scheduling UI (`portal/exams/schedule/new`), CFG-002 campus template clone with preview (`portal/setup/clone-actions.ts`), BRN-006 confirmed ✅.
 New in phase 8: NTF-002 template management UI (`portal/notifications/templates`); UX-003 search page already wired; UX-006 campus preference wired into library/HR/transport/inventory/health/safeguarding pages via `resolveCampusId()`.
@@ -226,6 +226,6 @@ Safeguarding. Dedicated `safeguardingOfficerRole` seeded for demo.
 | Already-enrolled student-record merge (ADM-006) | Too many FK cascades to do safely in one pass |
 | HR recruitment/applicant tracking | Would duplicate the admissions pipeline for low unique value |
 | SIS-004 cron scheduler invocation | `getExpiringDocuments` + cron route ✅; actual cron trigger is external infra (Vercel Cron / OS cron) — documented external dependency |
-| Portal UI translation (menus, pages) | Notification localization ✅ phase 14 (per-language templates, user language preference, recipient → org → English fallback); translating the portal UI itself is not started |
+| Portal UI translation beyond shell + account page | Shell (sidebar, top bar) and account page ✅ phase 16 in es/fr/pt/ar with RTL (`lib/i18n.ts`, English fallback per string); other pages and sw/hi dictionaries not yet translated. Machine-drafted — needs native review |
 | Real-time notification throttle windows | ✅ phase 15 — per-recipient rolling-window cap on non-urgent email/SMS (`notifications.throttleMax` / `throttleWindowMinutes` settings); security, billing and urgent notices exempt; held items remain in the in-app inbox and daily digest |
 | HOM / MOB native apps | Out of scope for web-only pass |

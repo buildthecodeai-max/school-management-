@@ -34,9 +34,14 @@ export default async function AttendanceListPage() {
         title={tr("Attendance")}
         subtitle={`${tr("Take and review today's registers")} · ${new Date().toLocaleDateString(ctxLocale(ctx), { weekday: "long", month: "long", day: "numeric" })}`}
         action={
-          <ButtonLink href="/portal/attendance/analytics" variant="ghost">
-            {tr("Analytics")}
-          </ButtonLink>
+          <div className="flex gap-2">
+            <ButtonLink href="/portal/attendance/reports" variant="ghost">
+              {tr("Reports")}
+            </ButtonLink>
+            <ButtonLink href="/portal/attendance/analytics" variant="ghost">
+              {tr("Analytics")}
+            </ButtonLink>
+          </div>
         }
       />
 

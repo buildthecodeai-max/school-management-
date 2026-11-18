@@ -668,6 +668,7 @@ model AttendanceSession {
   section      Section            @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   takenByStaff Staff?             @relation(fields: [takenByStaffId], references: [id])
   records      AttendanceRecord[]
+  amendments   AttendanceAmendment[]
 
   @@unique([sectionId, date, period])
   @@index([tenantId])
@@ -693,6 +694,25 @@ model AttendanceRecord {
   @@index([tenantId])
   @@index([studentId])
   @@map("attendance_records")
+}
+
+// Every change to a register after it was submitted: who, what, why.
+model AttendanceAmendment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  sessionId   String
+  studentId   String
+  fromCodeId  String?
+  toCodeId    String
+  reason      String
+  actorUserId String
+  createdAt   DateTime @default(now())
+
+  session AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([sessionId])
+  @@map("attendance_amendments")
 }
 
 // ---------------------------------------------------------------------------

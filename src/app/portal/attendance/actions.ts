@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUser, canForCampus } from "@/lib/rbac";
 import { dayStart } from "@/lib/dates";
+import { parseDay, formatDay, checkRegisterDate, diffMarks } from "@/lib/attendance";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
 import { emitWebhook } from "@/lib/webhooks";
@@ -14,6 +15,8 @@ const markSchema = z.object({
   submit: z.enum(["draft", "submit"]),
   // marks arrive as JSON: { [studentId]: codeId }
   marks: z.string(),
+  date: z.string().optional(),
+  reason: z.string().trim().max(500).optional(),
 });
 
 export interface AttendanceActionState {
@@ -31,13 +34,16 @@ export async function saveAttendance(
     sectionId: formData.get("sectionId"),
     submit: formData.get("submit"),
     marks: formData.get("marks"),
+    date: formData.get("date") || undefined,
+    reason: formData.get("reason") || undefined,
   });
   if (!parsed.success) return { error: "Invalid submission" };
 
-  const { sectionId, submit } = parsed.data;
+  const { sectionId, submit, reason } = parsed.data;
   let marks: Record<string, string>;
   try {
     marks = JSON.parse(parsed.data.marks);
+    if (!marks || typeof marks !== "object" || Array.isArray(marks)) throw new Error();
   } catch {
     return { error: "Could not read the register" };
   }
@@ -60,88 +66,129 @@ export async function saveAttendance(
     });
     return { error: "You do not have permission to record attendance here." };
   }
+  const canAmend = canForCampus(ctx, "attendance.amend", section.campusId);
 
   const today = dayStart();
+  const date = parsed.data.date ? parseDay(parsed.data.date) : today;
+  if (!date) return { error: "Choose a valid date." };
+  const dateCheck = checkRegisterDate(date, today, canAmend);
+  if (!dateCheck.ok) return { error: dateCheck.error };
 
-  // Idempotent session upsert on (sectionId, date, period).
+  // Marks may only name students enrolled in this section and codes of this school.
+  const [enrolled, codes] = await Promise.all([
+    prisma.enrollment.findMany({
+      where: { tenantId: ctx.tenantId!, sectionId, status: "ACTIVE" },
+      select: { studentId: true },
+    }),
+    prisma.attendanceCode.findMany({ where: { tenantId: ctx.tenantId! }, select: { id: true } }),
+  ]);
+  const enrolledIds = new Set(enrolled.map((e) => e.studentId));
+  const codeIds = new Set(codes.map((c) => c.id));
+  for (const [studentId, codeId] of Object.entries(marks)) {
+    if (!codeId) continue;
+    if (!enrolledIds.has(studentId)) return { error: "The register includes a student who is not in this section." };
+    if (!codeIds.has(codeId)) return { error: "The register uses an unknown attendance code." };
+  }
+  if (submit === "submit") {
+    const missing = [...enrolledIds].filter((id) => !marks[id]).length;
+    if (missing > 0) return { error: `${missing} student${missing === 1 ? " has" : "s have"} no mark yet. Mark everyone before submitting.` };
+  }
+
   const existing = await prisma.attendanceSession.findUnique({
-    where: {
-      sectionId_date_period: { sectionId, date: today, period: "DAY" },
-    },
+    where: { sectionId_date_period: { sectionId, date, period: "DAY" } },
+    include: { records: true },
   });
+  const existingMarks: Record<string, string> = {};
+  existing?.records.forEach((r) => (existingMarks[r.studentId] = r.codeId));
 
-  // Locked sessions require the privileged amend permission.
-  if (
-    existing?.status === "LOCKED" &&
-    !canForCampus(ctx, "attendance.amend", section.campusId)
-  ) {
-    return {
-      error: "This register is locked. Amending it requires approval rights.",
-    };
+  // After submission every change is an amendment: privileged, explained, logged.
+  const afterSubmit = existing?.status === "SUBMITTED" || existing?.status === "LOCKED";
+  const changes = diffMarks(existingMarks, marks);
+  if (afterSubmit && changes.length > 0) {
+    if (!canAmend) {
+      return {
+        error:
+          existing!.status === "LOCKED"
+            ? "This register is locked. Amending it requires approval rights."
+            : "This register has been submitted. Changing it requires amend rights.",
+      };
+    }
+    if (!reason || reason.length < 5) return { error: "Give a reason (at least 5 characters) for amending a submitted register." };
   }
 
   const staff = ctx.user.person
     ? await prisma.staff.findUnique({ where: { personId: ctx.user.person.id } })
     : null;
 
-  const session = existing
-    ? await prisma.attendanceSession.update({
-        where: { id: existing.id },
-        data: {
-          status: submit === "submit" ? "SUBMITTED" : existing.status === "LOCKED" ? "LOCKED" : "DRAFT",
-          submittedAt: submit === "submit" ? new Date() : existing.submittedAt,
-        },
-      })
-    : await prisma.attendanceSession.create({
-        data: {
-          tenantId: ctx.tenantId!,
-          campusId: section.campusId,
-          sectionId,
-          date: today,
-          period: "DAY",
-          status: submit === "submit" ? "SUBMITTED" : "DRAFT",
-          takenByStaffId: staff?.id ?? null,
-          submittedAt: submit === "submit" ? new Date() : null,
-        },
+  const nextStatus = afterSubmit ? existing!.status : submit === "submit" ? "SUBMITTED" : "DRAFT";
+
+  const session = await prisma.$transaction(async (tx) => {
+    const sess = existing
+      ? await tx.attendanceSession.update({
+          where: { id: existing.id },
+          data: {
+            status: nextStatus,
+            submittedAt: submit === "submit" && !existing.submittedAt ? new Date() : existing.submittedAt,
+          },
+        })
+      : await tx.attendanceSession.create({
+          data: {
+            tenantId: ctx.tenantId!,
+            campusId: section.campusId,
+            sectionId,
+            date,
+            period: "DAY",
+            status: nextStatus,
+            takenByStaffId: staff?.id ?? null,
+            submittedAt: submit === "submit" ? new Date() : null,
+          },
+        });
+    for (const ch of changes) {
+      await tx.attendanceRecord.upsert({
+        where: { sessionId_studentId: { sessionId: sess.id, studentId: ch.studentId } },
+        create: { tenantId: ctx.tenantId!, sessionId: sess.id, studentId: ch.studentId, codeId: ch.toCodeId },
+        update: { codeId: ch.toCodeId },
       });
+      if (afterSubmit) {
+        await tx.attendanceAmendment.create({
+          data: {
+            tenantId: ctx.tenantId!,
+            sessionId: sess.id,
+            studentId: ch.studentId,
+            fromCodeId: ch.fromCodeId,
+            toCodeId: ch.toCodeId,
+            reason: reason!,
+            actorUserId: ctx.user.id,
+          },
+        });
+      }
+    }
+    return sess;
+  });
 
-  // Upsert each record idempotently.
-  const entries = Object.entries(marks);
-  for (const [studentId, codeId] of entries) {
-    if (!codeId) continue;
-    await prisma.attendanceRecord.upsert({
-      where: { sessionId_studentId: { sessionId: session.id, studentId } },
-      create: {
-        tenantId: ctx.tenantId!,
-        sessionId: session.id,
-        studentId,
-        codeId,
-      },
-      update: { codeId },
-    });
-  }
-
-  await audit({
+  if (!afterSubmit || changes.length > 0) await audit({
     tenantId: ctx.tenantId,
     actorUserId: ctx.user.id,
-    action: submit === "submit" ? "attendance.submit" : "attendance.draft",
+    action: afterSubmit ? "attendance.amend" : submit === "submit" ? "attendance.submit" : "attendance.draft",
     targetType: "AttendanceSession",
     targetId: session.id,
     campusId: section.campusId,
     scopeType: "CAMPUS",
-    metadata: { count: entries.length },
+    metadata: { changed: changes.length, date: formatDay(date), ...(afterSubmit ? { reason } : {}) },
   });
 
-  // Guardian alerts on submit (ATT-003): notify for qualifying codes,
-  // deduplicated per session.
-  if (submit === "submit") {
+  // Guardian alerts (ATT-003): on submit and after amendments; deduplicated per
+  // session+student+code so resubmitting never double-alerts.
+  if (submit === "submit" || (afterSubmit && changes.length > 0)) {
     await generateGuardianAlerts(session.id, ctx.tenantId!);
+  }
+  if (submit === "submit" && !afterSubmit) {
     await emitWebhook(ctx.tenantId!, "attendance.session.submitted", {
       sessionId: session.id,
       sectionId,
       campusId: section.campusId,
       date: session.date.toISOString(),
-      recordCount: entries.length,
+      recordCount: Object.keys(marks).length,
     });
   }
 
@@ -149,11 +196,46 @@ export async function saveAttendance(
   revalidatePath("/portal/attendance");
   return {
     ok: true,
-    message:
-      submit === "submit"
+    message: afterSubmit
+      ? changes.length > 0
+        ? `Register amended (${changes.length} change${changes.length === 1 ? "" : "s"} recorded).`
+        : "No changes to save."
+      : submit === "submit"
         ? "Attendance submitted. Guardian alerts queued for absences and lates."
         : "Draft saved.",
   };
+}
+
+/** Freeze a submitted register: from now on only amend-rights holders can change it. */
+export async function lockAttendanceRegister(
+  _prev: AttendanceActionState,
+  formData: FormData,
+): Promise<AttendanceActionState> {
+  const ctx = await requireUser();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const session = await prisma.attendanceSession.findFirst({
+    where: { id: sessionId, tenantId: ctx.tenantId! },
+  });
+  if (!session) return { error: "Register not found" };
+  if (!canForCampus(ctx, "attendance.amend", session.campusId)) {
+    return { error: "You do not have permission to lock registers here." };
+  }
+  if (session.status !== "SUBMITTED") return { error: "Only a submitted register can be locked." };
+  await prisma.attendanceSession.update({
+    where: { id: session.id },
+    data: { status: "LOCKED", lockedAt: new Date() },
+  });
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: "attendance.lock",
+    targetType: "AttendanceSession",
+    targetId: session.id,
+    campusId: session.campusId,
+    scopeType: "CAMPUS",
+  });
+  revalidatePath(`/portal/attendance/${session.sectionId}`);
+  return { ok: true, message: "Register locked." };
 }
 
 async function generateGuardianAlerts(sessionId: string, tenantId: string) {

@@ -34,7 +34,11 @@ export function RegisterForm({
   codes,
   students,
   initialMarks,
+  date,
+  needsReason,
 }: {
+  date: string;
+  needsReason: boolean;
   sectionId: string;
   editable: boolean;
   codes: Code[];
@@ -92,6 +96,7 @@ export function RegisterForm({
 
       <form action={formAction}>
         <input type="hidden" name="sectionId" value={sectionId} />
+        <input type="hidden" name="date" value={date} />
         <input type="hidden" name="marks" value={JSON.stringify(marks)} />
 
         <div className="card overflow-hidden p-0">
@@ -158,6 +163,20 @@ export function RegisterForm({
           </p>
         )}
 
+        {editable && needsReason && (
+          <label className="mt-4 block text-sm">
+            <span className="mb-1 block font-medium">Reason for amending this submitted register</span>
+            <input
+              name="reason"
+              required
+              minLength={5}
+              maxLength={500}
+              placeholder="e.g. Parent confirmed child was present; marked absent in error"
+              className="w-full rounded-lg border border-[color:var(--color-line)] px-3 py-2"
+            />
+          </label>
+        )}
+
         {editable && (
           <div className="mt-4 flex gap-2">
             <button
@@ -176,7 +195,7 @@ export function RegisterForm({
               disabled={pending}
               className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
             >
-              {pending ? "Saving…" : "Submit register"}
+              {pending ? "Saving…" : needsReason ? "Save amendment" : "Submit register"}
             </button>
           </div>
         )}

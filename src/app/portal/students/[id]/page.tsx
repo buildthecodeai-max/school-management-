@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requirePermission, canForCampus } from "@/lib/rbac";
+import { requirePermission, canForCampus, can } from "@/lib/rbac";
 import { allowedCampusIds } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
@@ -151,7 +151,16 @@ export default async function StudentDetailPage({
       <PageHeader
         title={`${p.firstName} ${p.lastName}`}
         subtitle={`Admission ${student.admissionNumber}${current ? ` · ${current.campus.name} · ${current.gradeLevel.name} ${current.section.name}` : ""}`}
-        action={<Badge tone="green">{student.status}</Badge>}
+        action={
+          <div className="flex items-center gap-3">
+            {can(ctx, "student.merge") && (
+              <Link href={`/portal/students/${student.id}/merge`} className="text-sm text-brand-700 hover:underline">
+                Merge duplicate
+              </Link>
+            )}
+            <Badge tone="green">{student.status}</Badge>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

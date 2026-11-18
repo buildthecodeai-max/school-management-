@@ -27,6 +27,7 @@ export const PERMISSIONS = {
   // People & students (SIS)
   "student.read": "View student records",
   "student.write": "Create and edit student records",
+  "student.merge": "Merge duplicate student records (organization-wide, irreversible)",
   "guardian.read": "View guardian records and relationships",
   "guardian.write": "Create and edit guardian records and relationships",
   "staff.read": "View staff records",
@@ -160,6 +161,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
     keys: [
       "student.read",
       "student.write",
+      "student.merge",
       "guardian.read",
       "guardian.write",
       "staff.read",

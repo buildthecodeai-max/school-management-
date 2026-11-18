@@ -2993,3 +2993,39 @@ model SafeguardingNote {
   @@index([tenantId])
   @@map("safeguarding_notes")
 }
+
+// ---------------------------------------------------------------------------
+// Payment gateway inbound webhooks (FEE-003/005)
+// Provider-neutral: a tenant holds one signing secret per provider; each
+// inbound event is logged once (unique provider+eventId) so retries are no-ops.
+// ---------------------------------------------------------------------------
+
+model PaymentGatewayConfig {
+  id            String   @id @default(cuid())
+  tenantId      String
+  provider      String   @default("generic")
+  webhookSecret String
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, provider])
+  @@map("payment_gateway_configs")
+}
+
+model GatewayWebhookEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  provider   String
+  eventId    String
+  type       String
+  status     String // PROCESSED | IGNORED | FAILED
+  paymentId  String?
+  error      String?
+  payload    Json
+  receivedAt DateTime @default(now())
+
+  @@unique([tenantId, provider, eventId])
+  @@index([tenantId, receivedAt])
+  @@map("gateway_webhook_events")
+}

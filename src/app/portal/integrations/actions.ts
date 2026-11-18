@@ -147,3 +147,34 @@ export async function redeliverWebhookAction(formData: FormData) {
   });
   revalidatePath("/portal/integrations");
 }
+
+export async function rotateGatewaySecret() {
+  const ctx = await requireIntegrationsManage();
+  const webhookSecret = `whsec_${randomBytes(24).toString("hex")}`;
+  await prisma.paymentGatewayConfig.upsert({
+    where: { tenantId_provider: { tenantId: ctx.tenantId!, provider: "generic" } },
+    create: { tenantId: ctx.tenantId!, provider: "generic", webhookSecret },
+    update: { webhookSecret, active: true },
+  });
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: "integrations.gateway.rotate_secret",
+  });
+  revalidatePath("/portal/integrations");
+}
+
+export async function toggleGateway() {
+  const ctx = await requireIntegrationsManage();
+  const cfg = await prisma.paymentGatewayConfig.findUnique({
+    where: { tenantId_provider: { tenantId: ctx.tenantId!, provider: "generic" } },
+  });
+  if (!cfg) throw new Error("Generate a signing secret first.");
+  await prisma.paymentGatewayConfig.update({ where: { id: cfg.id }, data: { active: !cfg.active } });
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: cfg.active ? "integrations.gateway.disable" : "integrations.gateway.enable",
+  });
+  revalidatePath("/portal/integrations");
+}

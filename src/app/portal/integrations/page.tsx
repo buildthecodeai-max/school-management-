@@ -9,6 +9,8 @@ import {
   createWebhookEndpoint,
   deleteWebhookEndpoint,
   redeliverWebhookAction,
+  rotateGatewaySecret,
+  toggleGateway,
 } from "./actions";
 
 export default async function IntegrationsPage() {
@@ -26,6 +28,19 @@ export default async function IntegrationsPage() {
       </div>
     );
   }
+
+  const [gateway, gatewayEvents, tenant] = await Promise.all([
+    prisma.paymentGatewayConfig.findUnique({
+      where: { tenantId_provider: { tenantId: ctx.tenantId, provider: "generic" } },
+    }),
+    prisma.gatewayWebhookEvent.findMany({
+      where: { tenantId: ctx.tenantId },
+      orderBy: { receivedAt: "desc" },
+      take: 10,
+    }),
+    prisma.tenant.findUnique({ where: { id: ctx.tenantId }, select: { slug: true } }),
+  ]);
+  const gatewayUrl = `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/webhooks/payments/${tenant?.slug}`;
 
   const [clients, endpoints] = await Promise.all([
     prisma.apiClient.findMany({
@@ -115,6 +130,63 @@ export default async function IntegrationsPage() {
             </div>
           </Card>
         )}
+      </section>
+
+      {/* Payment gateway (inbound) */}
+      <section>
+        <h2 className="mb-3 text-lg font-semibold">Payment gateway (inbound)</h2>
+        <Card>
+          <p className="text-sm text-[color:var(--color-muted)]">
+            Point your gateway at this URL. Successful payments are posted as receipts and
+            allocated to invoices automatically. Refunds and disputes are flagged for review,
+            never reversed automatically.
+          </p>
+          <p className="mt-3 text-xs text-[color:var(--color-muted)]">Webhook URL</p>
+          <code className="block break-all text-sm">{gatewayUrl}</code>
+          <p className="mt-3 text-xs text-[color:var(--color-muted)]">
+            Sign each request with header <code>X-Scholarum-Signature: t=&lt;unix&gt;,v1=&lt;HMAC-SHA256(secret, &quot;t.body&quot;)&gt;</code>
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            {gateway ? (
+              <>
+                <Badge tone={gateway.active ? "green" : "slate"}>{gateway.active ? "ACTIVE" : "DISABLED"}</Badge>
+                <code className="text-xs">{gateway.webhookSecret}</code>
+                <form action={toggleGateway}>
+                  <button className="text-sm text-brand-700 hover:underline">
+                    {gateway.active ? "Disable" : "Enable"}
+                  </button>
+                </form>
+              </>
+            ) : null}
+            <form action={rotateGatewaySecret}>
+              <button className="rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                {gateway ? "Rotate secret" : "Generate signing secret"}
+              </button>
+            </form>
+          </div>
+
+          {gatewayEvents.length > 0 && (
+            <div className="mt-4 border-t border-[color:var(--color-line)] pt-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[color:var(--color-muted)]">
+                Recent events
+              </p>
+              <ul className="space-y-1.5 text-sm">
+                {gatewayEvents.map((e) => (
+                  <li key={e.id} className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      <Badge tone={e.status === "PROCESSED" ? "green" : e.status === "FAILED" ? "red" : "slate"}>
+                        {e.status}
+                      </Badge>
+                      <code className="text-xs">{e.type}</code>
+                      {e.error && <span className="text-xs text-red-600">{e.error}</span>}
+                    </span>
+                    <span className="text-xs text-[color:var(--color-muted)]">{e.receivedAt.toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Card>
       </section>
 
       {/* Webhooks */}

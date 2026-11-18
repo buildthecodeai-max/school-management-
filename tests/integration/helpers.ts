@@ -27,7 +27,8 @@ export async function makeCampus(tenantId: string, name = "Campus") {
     data: {
       tenantId,
       name: `${name} ${uid("c")}`,
-      code: uid("CODE").toUpperCase().slice(0, 20),
+      // Short and unique: the counter must survive any truncation.
+      code: `C${(++counter).toString(36)}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase().slice(0, 20),
       status: "ACTIVE",
     },
   });

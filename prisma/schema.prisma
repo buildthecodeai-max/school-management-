@@ -2749,7 +2749,7 @@ model TripAttendance {
   recordedByUserId String?
   createdAt  DateTime      @default(now())
 
-  route Route @relation(fields: [routeId], references: [id])
+  route Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@map("trip_attendances")
@@ -2813,7 +2813,7 @@ model InventoryItem {
   createdAt        DateTime @default(now())
 
   campus    Campus            @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  category  InventoryCategory @relation(fields: [categoryId], references: [id])
+  category  InventoryCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   warehouse Warehouse?        @relation(fields: [warehouseId], references: [id])
   supplier  Supplier?         @relation(fields: [supplierId], references: [id])
   ledger    StockLedgerEntry[]
@@ -2875,7 +2875,7 @@ model RequisitionLine {
   qty           Int
 
   requisition Requisition   @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
-  item        InventoryItem @relation(fields: [itemId], references: [id])
+  item        InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@map("requisition_lines")
@@ -2899,7 +2899,7 @@ model PurchaseOrder {
   createdAt   DateTime            @default(now())
 
   campus   Campus              @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  supplier Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   lines    PurchaseOrderLine[]
 
   @@index([tenantId])
@@ -2915,7 +2915,7 @@ model PurchaseOrderLine {
   unitCost Int     @default(0) // cents
 
   po   PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
-  item InventoryItem @relation(fields: [itemId], references: [id])
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@map("purchase_order_lines")
@@ -2930,8 +2930,8 @@ model AssetAssignment {
   returnedAt DateTime?
   notes      String?
 
-  item       InventoryItem @relation(fields: [itemId], references: [id])
-  assignedTo User          @relation(fields: [assignedToUserId], references: [id])
+  item       InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  assignedTo User          @relation(fields: [assignedToUserId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@map("asset_assignments")

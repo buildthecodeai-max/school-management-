@@ -11,7 +11,7 @@ export const STANDARD_ROLES: Record<string, string[]> = {
   "Campus Administrator": tenantPermissions.filter((p) => !p.startsWith("billing.") && !p.startsWith("health.") && !p.startsWith("safeguarding.")),
   "Admissions Officer": tenantPermissions.filter((p) => p.startsWith("admissions.") || ["student.read", "guardian.read", "campus.read", "message.read"].includes(p)),
   "Finance Officer": tenantPermissions.filter((p) => (p.startsWith("fee.") && p !== "fee.adjust") || ["student.read", "campus.read", "message.read"].includes(p)),
-  Teacher: ["student.read", "academics.read", "attendance.read", "attendance.write", "exams.read", "exams.enter", "timetable.read", "campus.read", "message.read"],
+  Teacher: ["student.read", "academics.read", "attendance.read", "attendance.write", "attendance.leave.request", "exams.read", "exams.enter", "timetable.read", "campus.read", "message.read"],
   "Parent / Guardian": ["message.read"],
 };
 

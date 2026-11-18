@@ -18,6 +18,8 @@ describe("approvals (maker-checker)", () => {
     tenantId = (await makeTenant("Approvals Org")).id;
     campusId = (await makeCampus(tenantId)).id;
     studentId = (await makeStudent({ tenantId, campusId, firstName: "Pay", lastName: "Back", admissionNumber: uid("A") })).id;
+    // 8000 paid and not applied to any invoice = the only refundable money.
+    await prisma.payment.create({ data: { tenantId, campusId, studentId, number: uid("P"), amount: 8000, method: "BANK" } });
     maker = await makeUser({ tenantId, permissions: ["fee.adjust", "inventory.requisition.approve"], scope: "ORG" });
     checker = await makeUser({ tenantId, permissions: ["fee.adjust", "inventory.requisition.approve"], scope: "ORG" });
     noRights = await makeUser({ tenantId, permissions: ["fee.read"], scope: "ORG" });
@@ -63,6 +65,24 @@ describe("approvals (maker-checker)", () => {
     expect((await decideApproval({}, fd({ id: r.id, decision: "REJECTED", note: "Not due" }))).ok).toBe(true);
     expect(await prisma.refund.count({ where: { studentId } })).toBe(before);
     expect((await prisma.approvalRequest.findUniqueOrThrow({ where: { id: r.id } })).decisionNote).toBe("Not due");
+  });
+
+  it("never refunds more than the unapplied credit", async () => {
+    // 8000 paid − 5000 already refunded = 3000 left.
+    const r = await refundRequest();
+    current = await ctxOf(checker);
+    expect((await decideApproval({}, fd({ id: r.id, decision: "APPROVED" }))).error).toMatch(/no longer has enough/i);
+    expect((await prisma.approvalRequest.findUniqueOrThrow({ where: { id: r.id } })).status).toBe("PENDING");
+    expect(await prisma.refund.count({ where: { studentId } })).toBe(1);
+  });
+
+  it("computes refundable credit from payments, allocations and refunds", async () => {
+    const { refundableCredit } = await import("@/lib/refunds");
+    expect(await refundableCredit(prisma, tenantId, studentId)).toBe(3000);
+    const inv = await prisma.invoice.create({ data: { tenantId, campusId, studentId, number: uid("I"), periodLabel: "T", dueDate: new Date(), total: 2000, balance: 2000 } });
+    const pay = await prisma.payment.findFirstOrThrow({ where: { studentId } });
+    await prisma.allocation.create({ data: { tenantId, paymentId: pay.id, invoiceId: inv.id, amount: 2000 } });
+    expect(await refundableCredit(prisma, tenantId, studentId)).toBe(1000);
   });
 
   it("cannot decide another school's request", async () => {

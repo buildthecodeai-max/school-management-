@@ -1,5 +1,6 @@
 "use server";
 
+import { DOCUMENT_TYPES } from "@/lib/student-documents";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -286,47 +287,83 @@ export async function withdrawEnrollment(
   return { ok: true, message: "Student withdrawn." };
 }
 
-// SIS-004: StudentDocument model — upload/register a document with expiry.
-const documentSchema = z.object({
-  studentId: z.string().min(1),
-  campusId: z.string().min(1),
-  docType: z.string().min(1),
-  label: z.string().min(1),
-  expiresAt: z.string().optional(),
-  fileUrl: z.string().url().optional().or(z.literal("")),
-});
-
+// SIS-004: register a document (with optional expiry) against a student. The
+// campus is taken from the student's own enrollment, never from the form.
 export async function registerStudentDocument(
   _prev: StudentActionState,
   formData: FormData,
 ): Promise<StudentActionState> {
   const ctx = await requireUser();
-  const parsed = documentSchema.safeParse({
-    studentId: formData.get("studentId"),
-    campusId: formData.get("campusId"),
-    docType: formData.get("docType"),
-    label: formData.get("label"),
-    expiresAt: formData.get("expiresAt") || undefined,
-    fileUrl: formData.get("fileUrl") || undefined,
-  });
-  if (!parsed.success) return { error: "Invalid form data." };
-  const { studentId, campusId, docType, label, expiresAt, fileUrl } = parsed.data;
-  if (!canForCampus(ctx, "student.write", campusId)) return { error: "Permission denied." };
+  const str = (k: string) => String(formData.get(k) ?? "").trim();
+  const student = ctx.tenantId
+    ? await prisma.student.findFirst({
+        where: { id: str("studentId"), tenantId: ctx.tenantId },
+        include: { enrollments: { orderBy: { startDate: "desc" }, take: 1 } },
+      })
+    : null;
+  if (!student) return { error: "Student not found." };
+  const campusId = student.enrollments[0]?.campusId;
+  if (!campusId || !canForCampus(ctx, "student.write", campusId)) return { error: "Permission denied." };
 
-  await prisma.studentDocument.create({
+  const docType = str("docType");
+  if (!(DOCUMENT_TYPES as readonly string[]).includes(docType)) return { error: "Choose a document type." };
+  const reference = str("reference").slice(0, 120);
+  const issuedAt = str("issuedAt") ? new Date(str("issuedAt")) : null;
+  const expiresAt = str("expiresAt") ? new Date(str("expiresAt")) : null;
+  if ((issuedAt && Number.isNaN(issuedAt.getTime())) || (expiresAt && Number.isNaN(expiresAt.getTime()))) return { error: "Enter valid dates." };
+  if (issuedAt && expiresAt && expiresAt <= issuedAt) return { error: "The expiry date must be after the issue date." };
+  const fileUrl = str("fileUrl");
+  if (fileUrl && !/^https?:\/\/\S+$/i.test(fileUrl)) return { error: "The file link must start with http:// or https://." };
+
+  const doc = await prisma.studentDocument.create({
     data: {
       tenantId: ctx.tenantId!,
-      studentId,
+      studentId: student.id,
       campusId,
       docType,
-      reference: label,
-      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      reference: reference || null,
+      issuedAt,
+      expiresAt,
+      status: expiresAt && expiresAt < new Date() ? "EXPIRED" : "VALID",
       fileUrl: fileUrl || null,
     },
   });
-
-  revalidatePath(`/portal/students/${studentId}`);
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: "student.document.registered",
+    targetType: "StudentDocument",
+    targetId: doc.id,
+    campusId,
+    scopeType: "CAMPUS",
+    metadata: { studentId: student.id, docType, expiresAt: expiresAt?.toISOString() ?? null },
+  });
+  revalidatePath(`/portal/students/${student.id}`);
   return { ok: true, message: "Document registered." };
+}
+
+export async function removeStudentDocument(
+  _prev: StudentActionState,
+  formData: FormData,
+): Promise<StudentActionState> {
+  const ctx = await requireUser();
+  const doc = ctx.tenantId
+    ? await prisma.studentDocument.findFirst({ where: { id: String(formData.get("id") ?? ""), tenantId: ctx.tenantId } })
+    : null;
+  if (!doc || !canForCampus(ctx, "student.write", doc.campusId)) return { error: "Permission denied." };
+  await prisma.studentDocument.delete({ where: { id: doc.id } });
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: "student.document.removed",
+    targetType: "StudentDocument",
+    targetId: doc.id,
+    campusId: doc.campusId,
+    scopeType: "CAMPUS",
+    metadata: { studentId: doc.studentId, docType: doc.docType },
+  });
+  revalidatePath(`/portal/students/${doc.studentId}`);
+  return { ok: true, message: "Document removed." };
 }
 
 // SIS-005: Bulk section reassignment with preview — update multiple students' active enrollment sectionId.

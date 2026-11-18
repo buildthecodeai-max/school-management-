@@ -13,7 +13,11 @@ import {
   suspendEnrollment as _suspendEnrollment,
   withdrawEnrollment as _withdrawEnrollment,
   updateGuardianLink as _updateGuardianLink,
+  registerStudentDocument,
+  removeStudentDocument,
 } from "../actions";
+import { ActionForm, inputCls as formInputCls, labelCls } from "@/components/ActionForm";
+import { DOCUMENT_TYPES, documentLabel, expiryState } from "@/lib/student-documents";
 
 async function updateGuardianLink(fd: FormData) { "use server"; await _updateGuardianLink(fd); }
 
@@ -43,6 +47,7 @@ export default async function StudentDetailPage({
       guardianLinks: {
         include: { guardian: { include: { person: true } } },
       },
+      documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
     },
   });
 
@@ -261,6 +266,52 @@ export default async function StudentDetailPage({
               </li>
             ))}
           </ul>
+        </Card>
+      </div>
+
+      <div className="mt-6">
+        <Card>
+          <h3 className="mb-3 font-semibold">Documents</h3>
+          {student.documents.length === 0 ? (
+            <p className="text-sm text-[color:var(--color-muted)]">No documents registered.</p>
+          ) : (
+            <ul className="divide-y divide-[color:var(--color-line)]">
+              {student.documents.map((d) => {
+                const state = expiryState(d.expiresAt);
+                return (
+                  <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                    <div>
+                      <span className="font-medium">{documentLabel(d.docType)}</span>
+                      {d.reference && <span className="text-[color:var(--color-muted)]"> · {d.reference}</span>}
+                      {d.fileUrl && <> · <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="text-brand-700 hover:underline">View file</a></>}
+                      {d.expiresAt && <p className="text-xs text-[color:var(--color-muted)]">Expires {d.expiresAt.toISOString().slice(0, 10)}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {state === "expired" && <Badge tone="red">Expired</Badge>}
+                      {state === "soon" && <Badge tone="amber">Expires soon</Badge>}
+                      {canStudentWrite && (
+                        <ActionForm action={removeStudentDocument} submit="Remove" variant="danger" confirmText="Remove this document record?" className="inline">
+                          <input type="hidden" name="id" value={d.id} />
+                        </ActionForm>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {canStudentWrite && (
+            <ActionForm action={registerStudentDocument} submit="Add document" className="mt-4 space-y-3 border-t border-[color:var(--color-line)] pt-4">
+              <input type="hidden" name="studentId" value={student.id} />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div><label className={labelCls}>Type</label><select name="docType" className={formInputCls}>{DOCUMENT_TYPES.map((t) => <option key={t} value={t}>{documentLabel(t)}</option>)}</select></div>
+                <div><label className={labelCls}>Number / reference</label><input name="reference" className={formInputCls} /></div>
+                <div><label className={labelCls}>File link (optional)</label><input name="fileUrl" placeholder="https://…" className={formInputCls} /></div>
+                <div><label className={labelCls}>Issued</label><input name="issuedAt" type="date" className={formInputCls} /></div>
+                <div><label className={labelCls}>Expires</label><input name="expiresAt" type="date" className={formInputCls} /></div>
+              </div>
+            </ActionForm>
+          )}
         </Card>
       </div>
 

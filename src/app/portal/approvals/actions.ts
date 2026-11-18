@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
 import { canForCampus, requireUser } from "@/lib/rbac";
 import { APPROVAL_PERMISSION } from "@/lib/approval-types";
+import { refundableCredit } from "@/lib/refunds";
 
 export interface ApprovalState {
   ok?: boolean;
@@ -30,9 +31,12 @@ export async function decideApproval(_p: ApprovalState, f: FormData): Promise<Ap
   if (decision === "REJECTED" && !note) return { error: "Give a reason when rejecting." };
 
   const payload = req.payload as Record<string, unknown>;
+  try {
   await prisma.$transaction(async (tx) => {
     if (decision === "APPROVED" && req.requestType === "fee.adjust") {
       const { studentId, amount, method, reason } = payload as { studentId: string; amount: number; method: string; reason: string };
+      // The credit may have been used since the request was made.
+      if (amount > (await refundableCredit(tx, req.tenantId, studentId))) throw new Error("NO_CREDIT");
       await tx.refund.create({ data: { tenantId: req.tenantId, studentId, amount, method: method as never, reason, approvedByUserId: ctx.user.id } });
     }
     if (req.requestType === "inventory.requisition" && req.referenceId) {
@@ -40,6 +44,10 @@ export async function decideApproval(_p: ApprovalState, f: FormData): Promise<Ap
     }
     await tx.approvalRequest.update({ where: { id: req.id }, data: { status: decision, decisionNote: note || null, decidedAt: new Date() } });
   });
+  } catch (e) {
+    if (e instanceof Error && e.message === "NO_CREDIT") return { error: "The student no longer has enough unapplied credit for this refund. Reject the request." };
+    throw e;
+  }
 
   await audit({
     tenantId: req.tenantId,

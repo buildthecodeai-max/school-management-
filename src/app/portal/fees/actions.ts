@@ -6,7 +6,8 @@ import { prisma } from "@/lib/db";
 import { requireUser, canForCampus } from "@/lib/rbac";
 import { audit } from "@/lib/audit";
 import { notify } from "@/lib/notify";
-import { toCents } from "@/lib/money";
+import { formatMoney, toCents } from "@/lib/money";
+import { refundableCredit } from "@/lib/refunds";
 import { effectiveSetting } from "@/lib/settings";
 import {
   computeInvoiceFromStructure,
@@ -584,6 +585,10 @@ export async function issueRefund(formData: FormData) {
   const campusId = student.enrollments[0]?.campusId ?? "";
   if (!canForCampus(ctx, "fee.adjust", campusId))
     throw new Error("Refunds require fee.adjust permission.");
+
+  const credit = await refundableCredit(prisma, ctx.tenantId!, studentId);
+  if (amount > credit)
+    throw new Error(`Only ${formatMoney(credit)} of unapplied credit can be refunded. Money applied to invoices needs a payment reversal.`);
 
   const { requestApproval } = await import("@/lib/approvals");
   await requestApproval({

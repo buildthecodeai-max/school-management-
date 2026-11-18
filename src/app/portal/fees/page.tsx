@@ -66,6 +66,9 @@ export default async function FeesDashboardPage() {
             <ButtonLink href="/portal/fees/reports" variant="ghost">
               {tr("Reports")}
             </ButtonLink>
+            <ButtonLink href="/portal/fees/assignments" variant="ghost">
+              Assignments
+            </ButtonLink>
             <ButtonLink href="/portal/fees/structures" variant="ghost">
               {tr("Fee structures")}
             </ButtonLink>

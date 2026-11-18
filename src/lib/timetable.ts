@@ -101,3 +101,10 @@ export function detectConflicts(slots: SlotInput[]): SlotConflict[] {
 
   return conflicts;
 }
+
+
+/** "HH:MM" 24h times with the end strictly after the start. */
+export function validTimes(start: string, end: string): boolean {
+  const ok = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+  return ok(start) && ok(end) && start < end;
+}

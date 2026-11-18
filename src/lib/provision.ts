@@ -6,6 +6,8 @@ import { hashPassword } from "./auth";
 import { ensureStandardRoles } from "./school-roles";
 import { DEFAULT_BANDS, parseBands } from "./grade-bands";
 
+import { ensureDefaultCompetencies } from "./competencies";
+
 export class ProvisionError extends Error {}
 
 export interface ProvisionInput {
@@ -94,6 +96,7 @@ export async function provisionSchool(input: ProvisionInput) {
           ] as { code: string; label: string; category: AttendanceCategory; countsAsPresent: boolean; notifyGuardian: boolean }[]
         ).map((c) => ({ tenantId: tenant.id, ...c })),
       });
+    await ensureDefaultCompetencies(tenant.id, tx);
     if ((await tx.gradeScale.count({ where: { tenantId: tenant.id } })) === 0) {
       const bands = parseBands(DEFAULT_BANDS).bands!;
       await tx.gradeScale.create({ data: { tenantId: tenant.id, name: "Standard A–F", bands: { create: bands.map((b) => ({ tenantId: tenant.id, ...b })) } } });

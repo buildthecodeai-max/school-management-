@@ -78,3 +78,14 @@ describe("detectConflicts — staff, room, section conflicts", () => {
     expect(types).toContain("ROOM");
   });
 });
+
+import { validTimes } from "@/lib/timetable";
+describe("validTimes", () => {
+  it("needs HH:MM 24h with end after start", () => {
+    expect(validTimes("08:00", "08:45")).toBe(true);
+    expect(validTimes("08:45", "08:00")).toBe(false);
+    expect(validTimes("08:00", "08:00")).toBe(false);
+    expect(validTimes("8:00", "09:00")).toBe(false);
+    expect(validTimes("25:00", "26:00")).toBe(false);
+  });
+});

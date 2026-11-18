@@ -2,6 +2,7 @@ import { requireUser, canForCampus } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { publishTimetableVersion } from "./actions";
+import { ActionForm } from "@/components/ActionForm";
 
 export const metadata = { title: "Timetable" };
 
@@ -134,20 +135,16 @@ export default async function TimetablePage({
         </div>
       )}
 
+      {version && (
+        <Link href={`/portal/academics/timetable/${version.id}`} className="inline-block text-sm text-indigo-600 underline">
+          {canWrite && version.status === "DRAFT" ? "Edit slots" : "Slot list"}
+        </Link>
+      )}
+
       {version && canPublish && version.status === "DRAFT" && (
-        <form
-          action={async () => {
-            "use server";
-            await publishTimetableVersion(version.id);
-          }}
-        >
-          <button
-            type="submit"
-            className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-          >
-            Publish this version
-          </button>
-        </form>
+        <ActionForm action={publishTimetableVersion} submit="Publish this version" confirmText="Publish this timetable? It replaces the active version.">
+          <input type="hidden" name="versionId" value={version.id} />
+        </ActionForm>
       )}
 
       {versions.length === 0 && (
@@ -214,7 +211,7 @@ export default async function TimetablePage({
           No slots in this version.{" "}
           {canWrite && (
             <Link
-              href={`/portal/academics/timetable/${version.id}/slot/new`}
+              href={`/portal/academics/timetable/${version.id}`}
               className="text-indigo-600 underline"
             >
               Add the first slot.

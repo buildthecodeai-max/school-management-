@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { requireUser, canForCampus } from "@/lib/rbac";
+import { requireUser, canForCampus, canAnywhere } from "@/lib/rbac";
+import { ensureDefaultCompetencies } from "@/lib/competencies";
 import { audit } from "@/lib/audit";
 
 export interface ExamScheduleState {
@@ -140,70 +141,75 @@ export async function createExamSchedule(
   return { ok: true, message: "Exam scheduled." };
 }
 
-// EXM-005: Save competency ratings for a student result.
-const competencyRatingSchema = z.object({
-  studentResultId: z.string().min(1),
-  campusId: z.string().min(1),
-  ratings: z.string().min(1), // JSON: [{competencyId, rating, comment?}]
-  conductRemark: z.string().optional(),
-});
-
+// EXM-005: Save competency ratings and the conduct remark for a published result.
 export async function saveCompetencyRatings(
   _prev: ExamScheduleState,
   formData: FormData,
 ): Promise<ExamScheduleState> {
   const ctx = await requireUser();
-  const parsed = competencyRatingSchema.safeParse({
-    studentResultId: formData.get("studentResultId"),
-    campusId: formData.get("campusId"),
-    ratings: formData.get("ratings"),
-    conductRemark: formData.get("conductRemark") || undefined,
-  });
-  if (!parsed.success) return { error: "Invalid form data." };
-  const { studentResultId, campusId, ratings, conductRemark } = parsed.data;
-  if (!canForCampus(ctx, "exams.enter", campusId)) return { error: "Permission denied." };
+  const studentResultId = String(formData.get("studentResultId") ?? "");
+  const conductRemark = formData.has("conductRemark") ? String(formData.get("conductRemark")).trim().slice(0, 500) : undefined;
 
-  let parsedRatings: { competencyId: string; rating: number; comment?: string }[];
-  try {
-    parsedRatings = JSON.parse(ratings);
-  } catch {
-    return { error: "Invalid ratings format." };
+  // The result (and so the campus) is resolved server-side from the school's own data.
+  const result = await prisma.studentResult.findFirst({
+    where: { id: studentResultId, tenantId: ctx.tenantId! },
+    include: { version: { include: { plan: { select: { id: true, campusId: true } } } } },
+  });
+  if (!result) return { error: "Result not found." };
+  const campusId = result.version.plan.campusId;
+  if (!canForCampus(ctx, "exams.enter", campusId)) return { error: "Permission denied." };
+  if (result.version.status !== "PUBLISHED") return { error: "Ratings can only be recorded on the current published result." };
+
+  const competencies = await prisma.competency.findMany({ where: { tenantId: ctx.tenantId! }, select: { id: true } });
+  const known = new Set(competencies.map((c) => c.id));
+  const rows: { competencyId: string; rating: number; comment: string | null }[] = [];
+  const clear: string[] = [];
+  for (const id of known) {
+    const raw = String(formData.get(`rating:${id}`) ?? "");
+    if (raw === "") { clear.push(id); continue; }
+    const rating = Number(raw);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 4) return { error: "Ratings must be between 1 and 4." };
+    const comment = String(formData.get(`comment:${id}`) ?? "").trim().slice(0, 300);
+    rows.push({ competencyId: id, rating, comment: comment || null });
   }
 
   await prisma.$transaction(async (tx) => {
-    // Upsert each rating.
-    for (const r of parsedRatings) {
+    for (const r of rows) {
       await tx.studentCompetencyRating.upsert({
         where: { studentResultId_competencyId: { studentResultId, competencyId: r.competencyId } },
-        create: { tenantId: ctx.tenantId!, studentResultId, competencyId: r.competencyId, rating: r.rating, comment: r.comment },
+        create: { tenantId: ctx.tenantId!, studentResultId, ...r },
         update: { rating: r.rating, comment: r.comment },
       });
     }
-    // Update conductRemark on the StudentResult if provided.
+    if (clear.length) await tx.studentCompetencyRating.deleteMany({ where: { studentResultId, competencyId: { in: clear } } });
     if (conductRemark !== undefined) {
-      await tx.studentResult.update({
-        where: { id: studentResultId },
-        data: { conductRemark },
-      });
+      await tx.studentResult.update({ where: { id: studentResultId }, data: { conductRemark: conductRemark || null } });
     }
   });
 
-  revalidatePath("/portal/exams");
-  return { ok: true, message: "Competency ratings saved." };
+  await audit({
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.user.id,
+    action: "exams.competency.save",
+    targetType: "StudentResult",
+    targetId: studentResultId,
+    campusId,
+    scopeType: "CAMPUS",
+    metadata: { rated: rows.length, conduct: conductRemark !== undefined },
+  });
+  revalidatePath(`/portal/exams/${result.version.plan.id}/report/${result.studentId}`);
+  return { ok: true, message: "Saved." };
 }
 
-// Seed default competencies for a tenant if none exist.
-export async function ensureDefaultCompetencies(tenantId: string) {
-  const existing = await prisma.competency.count({ where: { tenantId } });
-  if (existing > 0) return;
-
-  await prisma.competency.createMany({
-    data: [
-      { tenantId, code: "COLLAB", name: "Collaboration", description: "Works effectively with others" },
-      { tenantId, code: "COMM", name: "Communication", description: "Expresses ideas clearly" },
-      { tenantId, code: "CRIT", name: "Critical Thinking", description: "Analyses and evaluates information" },
-      { tenantId, code: "SELF", name: "Self-Management", description: "Organises time and completes tasks" },
-      { tenantId, code: "RESIL", name: "Resilience", description: "Persists through challenges" },
-    ],
-  });
+// Adds the standard competency set when the school has none (needs exams.manage).
+export async function seedDefaultCompetencies(
+  _prev: ExamScheduleState,
+  _formData: FormData,
+): Promise<ExamScheduleState> {
+  const ctx = await requireUser();
+  if (!canAnywhere(ctx, "exams.manage")) return { error: "Permission denied." };
+  const added = await ensureDefaultCompetencies(ctx.tenantId!);
+  await audit({ tenantId: ctx.tenantId, actorUserId: ctx.user.id, action: "exams.competency.seed", metadata: { added } });
+  revalidatePath("/portal/exams");
+  return { ok: true, message: added ? "Standard competencies added." : "Competencies already exist." };
 }

@@ -200,6 +200,14 @@ export async function publishResults(_prev: ExamActionState, formData: FormData)
   });
   const version = (last?.version ?? 0) + 1;
 
+  // Competency ratings and conduct remarks belong to the student's report, so a
+  // corrected republish carries them over from the version being replaced.
+  const prior = await prisma.studentResult.findMany({
+    where: { tenantId: ctx.tenantId!, version: { planId, status: "PUBLISHED" } },
+    include: { competencyRatings: true },
+  });
+  const priorBy = new Map(prior.map((r) => [r.studentId, r]));
+
   await prisma.$transaction(async (tx) => {
     // Supersede prior versions (corrections keep the old ones auditable).
     await tx.resultVersion.updateMany({
@@ -217,11 +225,16 @@ export async function publishResults(_prev: ExamActionState, formData: FormData)
       },
     });
     for (const r of data.computed) {
+      const old = priorBy.get(r.studentId);
       await tx.studentResult.create({
         data: {
           tenantId: ctx.tenantId!,
           resultVersionId: rv.id,
           studentId: r.studentId,
+          conductRemark: old?.conductRemark ?? null,
+          competencyRatings: old?.competencyRatings.length
+            ? { create: old.competencyRatings.map((c) => ({ tenantId: ctx.tenantId!, competencyId: c.competencyId, rating: c.rating, comment: c.comment })) }
+            : undefined,
           overallPercent: r.overallPercent,
           overallGrade: r.overallGrade,
           rank: r.rank,

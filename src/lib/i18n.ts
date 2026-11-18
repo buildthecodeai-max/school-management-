@@ -65,7 +65,7 @@ const ar: Dict = {
 };
 
 const BASE: Record<string, Dict> = { es, fr, pt, ar };
-const DICTS: Record<string, Dict> = Object.fromEntries(
+export const DICTS: Record<string, Dict> = Object.fromEntries(
   Object.keys({ ...BASE, ...EXTRA, ...DASHBOARDS }).map((l) => [l, { ...BASE[l], ...EXTRA[l], ...DASHBOARDS[l] }]),
 );
 const RTL = new Set(["ar"]);

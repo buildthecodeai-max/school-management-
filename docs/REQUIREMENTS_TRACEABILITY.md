@@ -7,7 +7,7 @@ Per PRD Appendix A, a requirement is "complete" only with acceptance evidence
 attached and approved. The ✅ marks below mean *implemented and manually
 exercised*, not formally accepted.
 
-Last updated: Phase 10 complete. All non-deferred requirements implemented.
+Last updated: Phase 12 complete. All non-deferred requirements implemented.
 New in phase 6: ADM-006 (student lifecycle UI), SIS-004/005, EXM-002/005, FEE-003/005/007, INV-po/asset, TRP-notify.
 New in phase 7: LIB-reserve (reserve/fulfill/cancel), FEE-007 download Route Handler (`api/portal/fees/gl-export`), EXM-002 scheduling UI (`portal/exams/schedule/new`), CFG-002 campus template clone with preview (`portal/setup/clone-actions.ts`), BRN-006 confirmed ✅.
 New in phase 8: NTF-002 template management UI (`portal/notifications/templates`); UX-003 search page already wired; UX-006 campus preference wired into library/HR/transport/inventory/health/safeguarding pages via `resolveCampusId()`.
@@ -91,7 +91,7 @@ browser, including the onboarding notice to the new guardian portal account.
 | EXM-006 | Corrections after publication are versioned & republished with a reason; previous versions auditable | ✅ | Republish creates a new `ResultVersion`, prior marked SUPERSEDED |
 
 Workflow §8.4 (marks → published report card) implemented and verified end to
-end. Exam scheduling (EXM-002) and competency ratings (EXM-005) are not yet built.
+end. Exam scheduling (EXM-002) and competency ratings (EXM-005) are implemented.
 
 ## §7.7 Fees (FEE)
 | ID | Requirement | Status | Where |
@@ -105,7 +105,7 @@ end. Exam scheduling (EXM-002) and competency ratings (EXM-005) are not yet buil
 | FEE-007 | Export accounting journals/dimensions to finance systems | ✅ | `exportGLJournal` in `portal/fees/bank-actions.ts` (string) + Route Handler at `api/portal/fees/gl-export` (downloadable CSV with `Content-Disposition`); groups `InvoiceLine` by `FeeHead.glAccountCode` for date range |
 
 Workflow §8.3 implemented through billing run → collect → allocate → receipt.
-Bank import (FEE-003/005) and GL export (FEE-007) are residual gaps.
+Bank import (FEE-003/005) and GL export (FEE-007) are implemented.
 
 ## §7.8 HR
 | ID | Requirement | Status | Where |

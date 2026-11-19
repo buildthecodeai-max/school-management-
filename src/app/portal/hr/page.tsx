@@ -1,7 +1,8 @@
 import { requirePermission, canForCampus, canAnywhere } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { approveLeaveHr } from "./actions";
+import { approveLeaveHr, initiateSeparation, toggleSeparationItem, completeSeparation } from "./actions";
+import { ActionForm, inputCls, labelCls } from "@/components/ActionForm";
 import { AddStaffForm } from "./AddStaffForm";
 import { preferredCampusId, resolveCampusId } from "@/lib/campus-preference";
 
@@ -209,18 +210,44 @@ export default async function HrPage({
       )}
 
       {tab === "separations" && (
-        <div className="space-y-2">
+        <div className="space-y-4">
+          {campusId && canForCampus(ctx, "hr.separation.manage", campusId) && (
+            <div className="rounded border border-gray-200 p-4">
+              <h3 className="mb-3 text-sm font-semibold">Start a separation</h3>
+              <ActionForm action={initiateSeparation} submit="Start checklist" pendingLabel="Starting…" className="grid gap-3 sm:grid-cols-3">
+                <label><span className={labelCls}>Staff member</span>
+                  <select name="staffId" required className={inputCls}><option value="">Choose…</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.person.firstName} {s.person.lastName}</option>)}</select></label>
+                <label><span className={labelCls}>Reason</span><input name="reason" required minLength={3} maxLength={300} className={inputCls} /></label>
+                <label><span className={labelCls}>Last working day</span><input type="date" name="lastWorkDay" required className={inputCls} /></label>
+              </ActionForm>
+            </div>
+          )}
           {separations.length === 0 ? (
             <p className="text-gray-500">No active separation checklists.</p>
           ) : (
             separations.map((s) => {
               const items = s.items as { label: string; done: boolean }[];
               const done = items.filter((i) => i.done).length;
+              const canManage = canForCampus(ctx, "hr.separation.manage", s.campusId);
               return (
-                <div key={s.id} className="rounded border border-gray-200 p-4 space-y-1">
+                <div key={s.id} className="rounded border border-gray-200 p-4 space-y-2">
                   <div className="font-medium">{s.staff.person.firstName} {s.staff.person.lastName}</div>
-                  <div className="text-sm text-gray-500">{s.reason} · Last work day: {s.lastWorkDay.toLocaleDateString()}</div>
-                  <div className="text-sm text-gray-500">{done}/{items.length} checklist items done</div>
+                  <div className="text-sm text-gray-500">{s.reason} · Last work day: {s.lastWorkDay.toLocaleDateString()} · {done}/{items.length} done</div>
+                  <ul className="divide-y divide-gray-100 text-sm">
+                    {items.map((it, idx) => (
+                      <li key={idx} className="flex items-center justify-between py-1.5">
+                        <span className={it.done ? "text-gray-400 line-through" : ""}>{it.label}</span>
+                        {canManage && (
+                          <ActionForm action={toggleSeparationItem} submit={it.done ? "Undo" : "Mark done"} variant="ghost">
+                            <input type="hidden" name="checklistId" value={s.id} /><input type="hidden" name="index" value={idx} />
+                          </ActionForm>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  {canManage && done === items.length && (
+                    <ActionForm action={completeSeparation} submit="Complete separation" confirmText="Close this checklist?"><input type="hidden" name="checklistId" value={s.id} /></ActionForm>
+                  )}
                 </div>
               );
             })

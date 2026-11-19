@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { allowedCampusIds } from "@/lib/scope";
 import { PageHeader, Card, ButtonLink } from "@/components/ui";
 import { Check } from "lucide-react";
+import { canForCampus } from "@/lib/rbac";
+import { CloneForm } from "./CloneForm";
 
 export default async function SetupPage() {
   const ctx = await requirePermission("setup.read");
@@ -51,6 +53,7 @@ export default async function SetupPage() {
     { label: "Students enrolled", done: enrollmentCount > 0, hint: `${enrollmentCount} active`, required: true, href: "/portal/import" },
   ];
 
+  const writable = (await prisma.campus.findMany({ where: { tenantId, status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true } })).filter((c) => canForCampus(ctx, "campus.write", c.id));
   const requiredItems = items.filter((i) => i.required);
   const requiredDone = requiredItems.filter((i) => i.done).length;
   const pct = Math.round((requiredDone / requiredItems.length) * 100);
@@ -105,6 +108,14 @@ export default async function SetupPage() {
           ))}
         </ul>
       </Card>
+
+      {writable.length >= 2 && (
+        <Card className="mt-6">
+          <h3 className="mb-1 font-semibold">Copy configuration to another campus</h3>
+          <p className="mb-4 text-sm text-[color:var(--color-muted)]">Set up a new campus from an existing one. Preview shows what will be created; nothing changes until you confirm.</p>
+          <CloneForm campuses={writable} />
+        </Card>
+      )}
     </div>
   );
 }

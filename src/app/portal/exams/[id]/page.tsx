@@ -8,6 +8,7 @@ import { PageHeader, Card, Badge } from "@/components/ui";
 import { MarksGrid } from "./MarksGrid";
 import { setPlanStatus, publishResults } from "../actions";
 import { ActionForm } from "@/components/ActionForm";
+import { deleteAssessmentPlan } from "../plan-actions";
 
 export default async function PlanDetailPage({
   params,
@@ -109,6 +110,14 @@ export default async function PlanDetailPage({
           </div>
         </div>
       </Card>
+
+      {canManage && plan.status === "OPEN" && marks.length === 0 && !latestVersion && (
+        <div className="mb-4 flex justify-end">
+          <ActionForm action={deleteAssessmentPlan} submit="Delete this plan" variant="danger" confirmText="Delete this assessment plan? It has no marks yet.">
+            <input type="hidden" name="id" value={plan.id} />
+          </ActionForm>
+        </div>
+      )}
 
       {/* Marks grid */}
       <div className="mb-6">

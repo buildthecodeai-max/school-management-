@@ -366,133 +366,85 @@ export async function removeStudentDocument(
   return { ok: true, message: "Document removed." };
 }
 
-// SIS-005: Bulk section reassignment with preview — update multiple students' active enrollment sectionId.
-const bulkReassignSchema = z.object({
-  campusId: z.string().min(1),
-  fromSectionId: z.string().min(1),
-  toSectionId: z.string().min(1),
-  preview: z.coerce.boolean().default(false),
-});
+// SIS-005: Bulk operations. Both preview first (mode=preview changes nothing), then commit
+// (mode=commit) inside one transaction, with every id checked against this school and campus.
+export type BulkState = StudentActionState & { affectedCount?: number; studentNames?: string[]; warnings?: string[] };
+const fstr = (f: FormData, k: string) => String(f.get(k) ?? "").trim().slice(0, 60);
+const modeOf = (f: FormData) => (fstr(f, "mode") === "commit" ? "commit" : "preview");
 
-export async function bulkReassignSection(
-  _prev: StudentActionState,
-  formData: FormData,
-): Promise<StudentActionState & { affectedCount?: number; studentNames?: string[] }> {
+export async function bulkReassignSection(_p: BulkState, f: FormData): Promise<BulkState> {
   const ctx = await requireUser();
-  const parsed = bulkReassignSchema.safeParse({
-    campusId: formData.get("campusId"),
-    fromSectionId: formData.get("fromSectionId"),
-    toSectionId: formData.get("toSectionId"),
-    preview: formData.get("preview"),
+  const mode = modeOf(f);
+  const [from, to] = await Promise.all([
+    prisma.section.findFirst({ where: { id: fstr(f, "fromSectionId"), tenantId: ctx.tenantId! } }),
+    prisma.section.findFirst({ where: { id: fstr(f, "toSectionId"), tenantId: ctx.tenantId! } }),
+  ]);
+  if (!from || !to) return { error: "Choose both sections." };
+  if (from.id === to.id) return { error: "Choose two different sections." };
+  // The campus comes from the sections, never from the form.
+  if (from.campusId !== to.campusId) return { error: "Both sections must be on the same campus. Use a campus transfer to move students between campuses." };
+  if (!canForCampus(ctx, "student.write", from.campusId)) return { error: "Permission denied." };
+  if (from.gradeLevelId !== to.gradeLevelId || from.academicYearId !== to.academicYearId)
+    return { error: "Sections must be in the same grade and academic year. Use promotion to change grade." };
+
+  const [enrollments, occupied] = await Promise.all([
+    prisma.enrollment.findMany({ where: { tenantId: ctx.tenantId!, sectionId: from.id, status: "ACTIVE" }, include: { student: { include: { person: true } } }, orderBy: { rollNumber: "asc" } }),
+    prisma.enrollment.count({ where: { tenantId: ctx.tenantId!, sectionId: to.id, status: "ACTIVE" } }),
+  ]);
+  if (enrollments.length === 0) return { error: "There are no active students in that section." };
+  if (to.capacity > 0 && occupied + enrollments.length > to.capacity)
+    return { error: `${to.name} has ${to.capacity - occupied} free place(s) but ${enrollments.length} student(s) would move.` };
+  const names = enrollments.map((e) => `${e.student.person.firstName} ${e.student.person.lastName}`);
+  if (mode === "preview") return { ok: true, affectedCount: enrollments.length, studentNames: names, message: `${enrollments.length} student(s) will move from ${from.name} to ${to.name}. Confirm to apply.` };
+
+  const moved = await prisma.$transaction(async (tx) => {
+    const r = await tx.enrollment.updateMany({ where: { id: { in: enrollments.map((e) => e.id) }, status: "ACTIVE", sectionId: from.id }, data: { sectionId: to.id, rollNumber: null } });
+    return r.count;
   });
-  if (!parsed.success) return { error: "Invalid form data." };
-  const { campusId, fromSectionId, toSectionId, preview } = parsed.data;
-  if (!canForCampus(ctx, "student.write", campusId)) return { error: "Permission denied." };
-
-  const enrollments = await prisma.enrollment.findMany({
-    where: { tenantId: ctx.tenantId!, campusId, sectionId: fromSectionId, status: "ACTIVE" },
-    include: { student: { include: { person: true } } },
-  });
-
-  if (preview) {
-    return {
-      ok: true,
-      affectedCount: enrollments.length,
-      studentNames: enrollments.map((e) => `${e.student.person.firstName} ${e.student.person.lastName}`),
-      message: `${enrollments.length} student(s) will be moved.`,
-    };
-  }
-
-  const ids = enrollments.map((e) => e.id);
-  await prisma.enrollment.updateMany({
-    where: { id: { in: ids } },
-    data: { sectionId: toSectionId },
-  });
-
-  await audit({
-    tenantId: ctx.tenantId,
-    actorUserId: ctx.user.id,
-    action: "student.bulk.reassign",
-    targetType: "Section",
-    targetId: fromSectionId,
-    campusId,
-    metadata: { fromSectionId, toSectionId, count: ids.length },
-  });
-
+  await audit({ tenantId: ctx.tenantId, actorUserId: ctx.user.id, action: "student.bulk.reassign", targetType: "Section", targetId: from.id, campusId: from.campusId, scopeType: "CAMPUS", metadata: { fromSectionId: from.id, toSectionId: to.id, count: moved } });
   revalidatePath("/portal/students");
-  return { ok: true, affectedCount: ids.length, message: `${ids.length} student(s) moved.` };
+  return { ok: true, affectedCount: moved, message: `${moved} student(s) moved to ${to.name}. Roll numbers were cleared; assign new ones if you use them.` };
 }
 
-// SIS-005: Bulk grade promotion — advance all active students to next grade level.
-const bulkPromoteSchema = z.object({
-  campusId: z.string().min(1),
-  fromGradeLevelId: z.string().min(1),
-  toGradeLevelId: z.string().min(1),
-  toSectionId: z.string().min(1),
-  toAcademicYearId: z.string().min(1),
-  preview: z.coerce.boolean().default(false),
-});
-
-export async function bulkPromoteGrade(
-  _prev: StudentActionState,
-  formData: FormData,
-): Promise<StudentActionState & { affectedCount?: number }> {
+// SIS-005: Year-end promotion: close each active enrollment in a grade and open one in the next.
+export async function bulkPromoteGrade(_p: BulkState, f: FormData): Promise<BulkState> {
   const ctx = await requireUser();
-  const parsed = bulkPromoteSchema.safeParse({
-    campusId: formData.get("campusId"),
-    fromGradeLevelId: formData.get("fromGradeLevelId"),
-    toGradeLevelId: formData.get("toGradeLevelId"),
-    toSectionId: formData.get("toSectionId"),
-    toAcademicYearId: formData.get("toAcademicYearId"),
-    preview: formData.get("preview"),
-  });
-  if (!parsed.success) return { error: "Invalid form data." };
-  const { campusId, fromGradeLevelId, toGradeLevelId, toSectionId, toAcademicYearId, preview } = parsed.data;
+  const mode = modeOf(f);
+  const [fromGrade, toSection] = await Promise.all([
+    prisma.gradeLevel.findFirst({ where: { id: fstr(f, "fromGradeLevelId"), tenantId: ctx.tenantId! } }),
+    prisma.section.findFirst({ where: { id: fstr(f, "toSectionId"), tenantId: ctx.tenantId! }, include: { gradeLevel: true, academicYear: true } }),
+  ]);
+  if (!fromGrade || !toSection) return { error: "Choose the grade to promote and the section they move into." };
+  // Target grade and year come from the chosen section, so the three can never disagree.
+  const campusId = fromGrade.campusId;
+  if (toSection.campusId !== campusId) return { error: "The target section must be on the same campus." };
   if (!canForCampus(ctx, "student.write", campusId)) return { error: "Permission denied." };
+  if (toSection.gradeLevelId === fromGrade.id) return { error: "Choose a section in a different grade than the one being promoted." };
 
-  const enrollments = await prisma.enrollment.findMany({
-    where: { tenantId: ctx.tenantId!, campusId, gradeLevelId: fromGradeLevelId, status: "ACTIVE" },
-  });
+  const [enrollments, occupied] = await Promise.all([
+    prisma.enrollment.findMany({ where: { tenantId: ctx.tenantId!, campusId, gradeLevelId: fromGrade.id, status: "ACTIVE" }, include: { student: { include: { person: true } } } }),
+    prisma.enrollment.count({ where: { tenantId: ctx.tenantId!, sectionId: toSection.id, status: "ACTIVE" } }),
+  ]);
+  if (enrollments.length === 0) return { error: `There are no active students in ${fromGrade.name}.` };
+  if (enrollments.some((e) => e.academicYearId === toSection.academicYearId))
+    return { error: `Some of these students are already enrolled in ${toSection.academicYear.name}. Promotion moves students into a later year.` };
+  if (toSection.capacity > 0 && occupied + enrollments.length > toSection.capacity)
+    return { error: `${toSection.name} has ${Math.max(0, toSection.capacity - occupied)} free place(s) but ${enrollments.length} student(s) would be promoted. Pick a larger section or promote in groups.` };
+  const names = enrollments.map((e) => `${e.student.person.firstName} ${e.student.person.lastName}`);
+  if (mode === "preview") return { ok: true, affectedCount: enrollments.length, studentNames: names, message: `${enrollments.length} student(s) will move from ${fromGrade.name} to ${toSection.gradeLevel.name} (${toSection.name}, ${toSection.academicYear.name}). Confirm to apply.` };
 
-  if (preview) {
-    return { ok: true, affectedCount: enrollments.length, message: `${enrollments.length} student(s) will be promoted.` };
-  }
+  const now = new Date();
+  const done = await prisma.$transaction(async (tx) => {
+    const closed = await tx.enrollment.updateMany({ where: { id: { in: enrollments.map((e) => e.id) }, status: "ACTIVE" }, data: { status: "COMPLETED", endDate: now } });
+    if (closed.count !== enrollments.length) throw new Error("STALE_PROMOTION");
+    await tx.enrollment.createMany({ data: enrollments.map((e) => ({ tenantId: ctx.tenantId!, studentId: e.studentId, campusId, academicYearId: toSection.academicYearId, gradeLevelId: toSection.gradeLevelId, sectionId: toSection.id, status: "ACTIVE" as const, startDate: now })) });
+    return closed.count;
+  }).catch((e) => (e instanceof Error && e.message === "STALE_PROMOTION" ? null : Promise.reject(e)));
+  if (done === null) return { error: "Some students changed while you were working. Run the preview again." };
 
-  await prisma.$transaction(async (tx) => {
-    // Close existing enrollments
-    await tx.enrollment.updateMany({
-      where: { id: { in: enrollments.map((e) => e.id) } },
-      data: { status: "COMPLETED", endDate: new Date() },
-    });
-    // Create new enrollments in the promoted grade
-    for (const e of enrollments) {
-      await tx.enrollment.create({
-        data: {
-          tenantId: ctx.tenantId!,
-          studentId: e.studentId,
-          campusId,
-          academicYearId: toAcademicYearId,
-          gradeLevelId: toGradeLevelId,
-          sectionId: toSectionId,
-          status: "ACTIVE",
-          startDate: new Date(),
-        },
-      });
-    }
-  });
-
-  await audit({
-    tenantId: ctx.tenantId,
-    actorUserId: ctx.user.id,
-    action: "student.bulk.promote",
-    targetType: "GradeLevel",
-    targetId: fromGradeLevelId,
-    campusId,
-    metadata: { fromGradeLevelId, toGradeLevelId, count: enrollments.length },
-  });
-
+  await audit({ tenantId: ctx.tenantId, actorUserId: ctx.user.id, action: "student.bulk.promote", targetType: "GradeLevel", targetId: fromGrade.id, campusId, scopeType: "CAMPUS", metadata: { fromGradeLevelId: fromGrade.id, toGradeLevelId: toSection.gradeLevelId, toSectionId: toSection.id, count: done } });
   revalidatePath("/portal/students");
-  return { ok: true, affectedCount: enrollments.length, message: `${enrollments.length} student(s) promoted.` };
+  return { ok: true, affectedCount: done, message: `${done} student(s) promoted to ${toSection.gradeLevel.name}.` };
 }
 
 // C.3: Update financiallyResponsible / canPickup / receivesNotifications flags on a guardian link.
@@ -526,18 +478,4 @@ export async function updateGuardianLink(formData: FormData): Promise<StudentAct
   });
   revalidatePath(`/portal/students/${link.studentId}`);
   return { ok: true, message: "Guardian link updated." };
-}
-
-// Check documents expiring within N days (SIS-004) — called by cron.
-export async function getExpiringDocuments(tenantId: string, withinDays = 30) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() + withinDays);
-  return prisma.studentDocument.findMany({
-    where: {
-      tenantId,
-      expiresAt: { lte: cutoff, gte: new Date() },
-    },
-    include: { student: { include: { person: true } } },
-    orderBy: { expiresAt: "asc" },
-  });
 }

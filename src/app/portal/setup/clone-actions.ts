@@ -27,12 +27,9 @@ export interface ClonePreview {
 const cloneSchema = z.object({
   sourceCampusId: z.string().min(1),
   targetCampusId: z.string().min(1),
-  preview: z.coerce.boolean().default(true),
-  cloneAcademicStructure: z.coerce.boolean().default(true),
-  cloneFeeStructures: z.coerce.boolean().default(true),
-  cloneAssessmentPlans: z.coerce.boolean().default(true),
-  cloneGradeScales: z.coerce.boolean().default(true),
 });
+// Checkbox-style flags arrive as the literal "true"; anything else (absent, "false") is off.
+const flag = (f: FormData, k: string) => f.get(k) === "true";
 
 // CFG-002: Clone campus configuration from a source campus to a target campus.
 // Two modes: preview=true returns counts; preview=false commits in $transaction.
@@ -41,21 +38,22 @@ export async function cloneCampusConfig(
   formData: FormData,
 ): Promise<CloneState> {
   const ctx = await requireUser();
-  const parsed = cloneSchema.safeParse({
-    sourceCampusId: formData.get("sourceCampusId"),
-    targetCampusId: formData.get("targetCampusId"),
-    preview: formData.get("preview"),
-    cloneAcademicStructure: formData.get("cloneAcademicStructure"),
-    cloneFeeStructures: formData.get("cloneFeeStructures"),
-    cloneAssessmentPlans: formData.get("cloneAssessmentPlans"),
-    cloneGradeScales: formData.get("cloneGradeScales"),
-  });
-  if (!parsed.success) return { error: "Invalid form data." };
-  const { sourceCampusId, targetCampusId, preview, cloneAcademicStructure, cloneFeeStructures, cloneAssessmentPlans, cloneGradeScales } = parsed.data;
+  const parsed = cloneSchema.safeParse({ sourceCampusId: formData.get("sourceCampusId"), targetCampusId: formData.get("targetCampusId") });
+  if (!parsed.success) return { error: "Choose a source and a target campus." };
+  const { sourceCampusId, targetCampusId } = parsed.data;
+  const preview = formData.get("mode") !== "commit";
+  const cloneAcademicStructure = flag(formData, "cloneAcademicStructure");
+  const cloneFeeStructures = flag(formData, "cloneFeeStructures");
+  const cloneAssessmentPlans = flag(formData, "cloneAssessmentPlans");
+  const cloneGradeScales = false; // grade scales belong to the whole school, so there is nothing to copy per campus
+  if (!cloneAcademicStructure && !cloneFeeStructures && !cloneAssessmentPlans) return { error: "Choose what to copy." };
 
   if (sourceCampusId === targetCampusId) return { error: "Source and target campus must be different." };
   if (!canForCampus(ctx, "campus.write", sourceCampusId)) return { error: "Permission denied on source campus." };
   if (!canForCampus(ctx, "campus.write", targetCampusId)) return { error: "Permission denied on target campus." };
+  const found = await prisma.campus.count({ where: { id: { in: [sourceCampusId, targetCampusId] }, tenantId: ctx.tenantId! } });
+  if (found !== 2) return { error: "Campus not found." };
+  if (cloneAssessmentPlans && !cloneAcademicStructure) return { error: "Assessment plans belong to sections and terms, so copy the academic structure too." };
 
   const tenantId = ctx.tenantId!;
 
@@ -108,6 +106,25 @@ export async function cloneCampusConfig(
     assessmentPlans: sourceAssessmentPlans.length,
     gradeScales: sourceGradeScales.length,
   };
+
+  // Cloning twice would duplicate everything, so the target must be empty of what is being copied.
+  if (cloneAcademicStructure) {
+    const existing = await Promise.all([
+      prisma.gradeLevel.count({ where: { tenantId, campusId: targetCampusId } }),
+      prisma.academicYear.count({ where: { tenantId, campusId: targetCampusId } }),
+      prisma.section.count({ where: { tenantId, campusId: targetCampusId } }),
+    ]);
+    if (existing.some((n) => n > 0)) return { error: "The target campus already has grades, years or sections. Copy into a campus that has none." };
+  }
+  if (cloneFeeStructures) {
+    if (sourceFeeStructures.some((f) => f.gradeLevelId) && !cloneAcademicStructure)
+      return { error: "Fee structures are tied to grade levels, so copy the academic structure too." };
+    const names = sourceFeeStructures.map((f) => f.name);
+    if (names.length && (await prisma.feeStructure.count({ where: { tenantId, campusId: targetCampusId, name: { in: names } } })) > 0)
+      return { error: "The target campus already has fee structures with the same names." };
+  }
+  if (previewCounts.academicYears + previewCounts.gradeLevels + previewCounts.feeStructures + previewCounts.assessmentPlans === 0)
+    return { error: "The source campus has nothing to copy for those choices." };
 
   if (preview) {
     return { ok: true, preview: previewCounts, message: "Preview ready. Review before committing." };

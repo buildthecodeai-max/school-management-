@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getExpiringDocuments } from "@/app/portal/students/actions";
+import { getExpiringDocuments } from "@/lib/document-expiry";
 import { notify } from "@/lib/notify";
 import { checkCronAuth } from "@/lib/cron-auth";
 

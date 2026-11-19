@@ -137,15 +137,4 @@ export async function saveCampusSetting(
   return { ok: true, message: `Campus override for “${key}” saved.` };
 }
 
-// Kept for backward compatibility with any caller expecting a flat map.
-export async function getCampusSettings(
-  tenantId: string,
-  campusId: string,
-): Promise<Record<string, string>> {
-  const rows = await prisma.campusSetting.findMany({ where: { tenantId, campusId } });
-  const map: Record<string, string> = {};
-  for (const r of rows) map[r.key] = String(r.value);
-  return map;
-}
-
 export type { SettingKey };

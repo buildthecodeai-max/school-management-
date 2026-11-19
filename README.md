@@ -65,6 +65,7 @@ row-by-row status and [Known limitations](#known-limitations) for the summary.
 | Subscription | `/portal/billing` | Plan, entitlements and usage against limits (view only) |
 | Platform console | `/portal/platform` | Tenant provisioning, suspension, support impersonation, data export and offboarding, plans, platform audit log |
 | Family portal | `/portal/family` | For guardians and students: per-child attendance, results, timetable, leave requests, and (paying or primary guardian only) fees and receipts |
+| Users & roles | `/portal/settings/users`, `/portal/settings/roles` | School owners add people with a one-time invite link, give and remove roles (never more than they hold themselves), disable accounts (signs them out), see an effective-access preview, and manage custom roles from the permission catalog. Built-in roles are read-only; the last organization-wide manager is protected |
 | Approvals | `/portal/approvals` | Inbox for refunds and requisitions with maker-checker (the requester cannot approve their own) |
 | Account | `/portal/account` | Change password, two-factor authentication, notification and language preferences |
 

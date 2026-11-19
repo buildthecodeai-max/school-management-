@@ -272,7 +272,7 @@ Found 2026-11-18, closed by 2026-11-20. Full account in [COMPLETION_REPORT.md](C
   vehicles, routes, stops, inventory items, categories, suppliers and library categories.
   Not covered: positions (only departments), staff loans and advances.
 - **Onboarding:** provisioning creates the admin role, an invite link, a trial subscription and
-  default data. School owners still cannot create users or roles themselves (IAM-001).
+  default data. School owners manage their own users and roles under Settings (IAM-001, done 2026-11-20).
 - **Two-factor (SEC-002), mark-import rules (EXM-003), approvals (IAM-003):** fixed and tested.
 
 Requirement rows above that say "view only", "no screen" or "unwired" for the following were

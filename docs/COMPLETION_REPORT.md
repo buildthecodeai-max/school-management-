@@ -38,6 +38,7 @@ clicking through them. Nothing was written to the demo data.
 - **Staff**: leave requests, separation checklists. **Students**: documents with expiry, bulk promotion and section moves with preview.
 - **Transport, inventory, library, health, safeguarding**: full management screens (they were view-only).
 - **Family portal** for guardians and students, with privacy rules.
+- **School-owner user and role management** (IAM-001): add people by one-time invite link, grant and revoke roles within the manager's own rights, disable and sign out, effective-access preview, custom roles from the permission catalog with escalation, lockout and built-in-role protections.
 - **Regression guards** that fail the test run on the mistake classes that caused most of the defects below.
 
 ## Partially completed
@@ -55,7 +56,6 @@ clicking through them. Nothing was written to the demo data.
 
 ## Not done
 
-- **School-owner user and role management** with permission preview (IAM-001): only platform operators can create users and roles.
 - Announcement composer, forms and surveys, emergency broadcast (E.1–E.4), subscription upgrade flow, usage metering and dunning (B.3–B.9), homeschool, native mobile, offline editions.
 - Non-functional evidence: load, accessibility, restore drills, observability.
 - Student photos and ID generation, emergency contact management, teacher and staff document upload.
@@ -90,6 +90,7 @@ Schema: deleting a school failed once it had trips, asset assignments, library o
 | Attendance | Complete for daily registers | integration tests, browser (register, reports) |
 | Exams, results, report cards | Complete for the workflow and printable cards | integration tests, browser (plan page) |
 | Teacher / staff | Leave, separation, timetable, marks, registers | integration tests |
+| Access management (users, roles) | Complete | integration tests (11), browser as owner and as a campus admin |
 | Student & guardian portals | Child hub complete | integration tests, browser as parent |
 | Library, transport, inventory, health, safeguarding | Complete management screens | integration tests; screens opened but not driven with data |
 | HR | Staff, leave, payroll runs, recruitment, separation | integration tests |

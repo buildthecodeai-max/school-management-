@@ -36,8 +36,8 @@ closed. The authoritative status is [COMPLETION_REPORT.md](COMPLETION_REPORT.md)
 | Library reservations, bank reconciliation | Built |
 | Student and guardian portals | Child hub with privacy rules and leave |
 
-Still open (not re-scored requirement by requirement): school-owner user and role management
-(IAM-001), production baseline migration, announcement composer and forms, usage metering and
+Done since: production baseline migration and school-owner user and role management (IAM-001).
+Still open (not re-scored requirement by requirement): announcement composer and forms, usage metering and
 dunning, period-level attendance, PDF report cards, online fee payment, translation of new
 screens, and non-functional evidence (load, accessibility, restore).
 

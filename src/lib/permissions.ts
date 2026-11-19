@@ -17,6 +17,8 @@ export const PERMISSIONS = {
   "setup.read": "View the guided onboarding checklist",
   "data.import": "Bulk import master data (students, etc.)",
   "integrations.manage": "Manage API clients and webhook endpoints",
+  "iam.users.manage": "Create school users, grant and remove their roles, disable accounts and issue invite links",
+  "iam.roles.manage": "Create, edit and delete custom roles",
 
   // Admissions
   "admissions.read": "View the admissions pipeline and applications",
@@ -170,6 +172,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
       "staff.write",
     ],
   },
+  { label: "Access control", keys: ["iam.users.manage", "iam.roles.manage"] },
   { label: "Academics", keys: ["academics.read", "academics.write"] },
   {
     label: "Assessment & exams",

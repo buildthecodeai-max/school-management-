@@ -353,6 +353,7 @@ the browser sent. The rules below are now conventions, and the first four are ch
 7. Bulk operations take `mode=preview|commit`. Only the literal `commit` writes.
 8. Sensitive reads (health records, safeguarding cases) are audited; audit metadata names fields
    and ids, never the sensitive content.
-9. Parents and students reach a child only through `lib/family.ts`; staff permissions never grant
+9. Access management (`lib/access.ts`, `lib/access-server.ts`): nobody can give a role or permission they do not hold at that scope; a manager may touch an account only if they manage every scope it works in and could grant everything it holds; platform permissions and the wildcard never enter school roles; built-in roles are read-only; the school always keeps an organization-wide manager; people cannot change their own access.
+10. Parents and students reach a child only through `lib/family.ts`; staff permissions never grant
    family access, and fee data is limited to the paying or primary guardian.
 

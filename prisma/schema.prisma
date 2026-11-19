@@ -2582,8 +2582,8 @@ model LibraryItem {
   createdAt  DateTime @default(now())
 
   campus   Campus           @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  category LibraryCategory  @relation(fields: [categoryId], references: [id])
-  author   LibraryAuthor?   @relation(fields: [authorId], references: [id])
+  category LibraryCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  author   LibraryAuthor?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
   copies   LibraryCopy[]
   reservations LibraryReservation[]
 
@@ -2631,11 +2631,12 @@ model LibraryCirculation {
   returnedAt      DateTime?
   fineAmount      Int                    @default(0)
   finePaid        Boolean                @default(false)
+  renewCount      Int                    @default(0)
   createdAt       DateTime               @default(now())
 
   campus  Campus      @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  copy    LibraryCopy @relation(fields: [copyId], references: [id])
-  borrower User       @relation(fields: [borrowerUserId], references: [id])
+  copy    LibraryCopy @relation(fields: [copyId], references: [id], onDelete: Cascade)
+  borrower User       @relation(fields: [borrowerUserId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([borrowerUserId])
@@ -2654,8 +2655,8 @@ model LibraryReservation {
   createdAt       DateTime @default(now())
 
   campus     Campus      @relation(fields: [campusId], references: [id], onDelete: Cascade)
-  item       LibraryItem @relation(fields: [itemId], references: [id])
-  reservedBy User        @relation(fields: [reservedByUserId], references: [id])
+  item       LibraryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  reservedBy User        @relation(fields: [reservedByUserId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@map("library_reservations")

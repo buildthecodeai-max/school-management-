@@ -17,7 +17,38 @@ Legend: ✅ implemented · 🟡 partial · ❌ missing · 🔴 security/backend 
 
 ---
 
-## 0. Update — 2026-11-18
+## 0. Update — 2026-11-20 (current)
+
+The 2026-11-18 update below found 31 server actions with no caller, 4 dead links, setup data
+with no creation path, unenforced two-factor sign-in and unresolvable approvals. Those are now
+closed. The authoritative status is [COMPLETION_REPORT.md](COMPLETION_REPORT.md); in short:
+
+| 2026-11-18 finding | Now |
+| --- | --- |
+| 31 server actions with no caller | 0. Each was wired to a screen or deleted; `tests/unit/static-guards.test.ts` fails if one reappears |
+| 4 links to missing pages | 0. The same guard fails on any dead `/portal` link |
+| Setup data had no creation path | Academic configuration, plans, codes, leave types, departments, vehicles, routes, items, categories, suppliers, library categories, fee assignments all have screens |
+| Two-factor not enforced | Enforced at sign-in |
+| Mark import skipped `saveMarks` rules | Fixed |
+| Approvals never resolved | Approvals inbox with maker-checker; refunds and requisitions execute |
+| New school unusable | Provisioning creates roles, invite link, subscription and defaults |
+| View-only transport, inventory, health, safeguarding | Full management screens |
+| Library reservations, bank reconciliation | Built |
+| Student and guardian portals | Child hub with privacy rules and leave |
+
+Still open (not re-scored requirement by requirement): school-owner user and role management
+(IAM-001), production baseline migration, announcement composer and forms, usage metering and
+dunning, period-level attendance, PDF report cards, online fee payment, translation of new
+screens, and non-functional evidence (load, accessibility, restore).
+
+The 2026-11-20 pass also found and fixed a larger class of defect than the 2026-11-18 audit
+expected: server actions that trusted ids or campuses sent by the browser (cross-school writes
+in inventory, health, safeguarding, bulk student moves, competencies and more). The list is in
+the completion report.
+
+---
+
+## 0a. Update — 2026-11-18 (superseded by §0 above)
 
 This update does **not** re-score all 180 in-scope requirement IDs (the full
 row-by-row table is not in this file). It refreshes the verified facts, records what

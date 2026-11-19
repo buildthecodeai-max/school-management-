@@ -1,5 +1,13 @@
 # Scholarum Feature Reference
 
+> **Currency note (2026-11-20).** This reference was written before the completion pass. The
+> sections for Attendance, Assessment, Fees, Library, Transport, Inventory, Health and
+> safeguarding, Students (bulk actions, documents), Setup and the guardian dashboard describe
+> the earlier, thinner behaviour and its "view only" / "no screen" caveats. For what the app
+> does now, see [COMPLETION_REPORT.md](COMPLETION_REPORT.md) and the module table in the README.
+> Sections on admissions, finance, communication, integrations, platform and account are unchanged.
+
+
 > **Multi-tenant school management SaaS** · Multi-campus · Role-based access · Next.js 15 · Prisma · PostgreSQL · Subscription-based
 
 Every feature operates within a strict tenant boundary and optional campus scope, with role-based access control (RBAC) enforced on the server.

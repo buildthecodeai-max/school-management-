@@ -15,7 +15,16 @@ the matrix in `FEATURE_GAP_AUDIT.md` only after acceptance evidence exists.
 
 ---
 
-## Status — 2026-11-18
+## Status — 2026-11-20
+
+Phase J (below) is finished except J.12 and J.14. The table that follows is the 2026-11-18
+snapshot; where it disagrees with the Phase J status column or with
+[COMPLETION_REPORT.md](COMPLETION_REPORT.md), those win. Changes since the snapshot: A.3
+approvals inbox ✅, A.4 MFA enforced ✅, C.4 bulk safety ✅ (preview, validation; still no rollback),
+C.8 refunds ✅, D.4 competency ratings ✅ (templates still ⬜), D.5 timetable slots ✅, library
+renewals ✅, E.5 student portal 🟡 (child hub, no payments).
+
+## Snapshot — 2026-11-18
 
 Legend: ✅ done and usable · 🟡 partly done (see note) · ⬜ not started. "Done" follows
 the audit's rule: a user can reach it from a screen. Items rated 🟡 because logic
@@ -75,7 +84,7 @@ exists without a screen are covered by Phase J.
 
 ---
 
-## Phase J — Close the reachability gaps (recommended next)
+## Phase J — Close the reachability gaps
 
 Added 2026-11-18. The audit found server logic with no screen, dead links, and setup
 data with no creation path (see the "Reachability gaps" section of
@@ -83,23 +92,23 @@ data with no creation path (see the "Reachability gaps" section of
 come before new feature volume. Each ends with the screen reachable, a permission
 check on the server, an audit entry, and a negative test.
 
-| Slice | What | Unblocks |
-| --- | --- | --- |
-| J.0 | **Enforce two-factor at sign-in.** Add a challenge step between the password check and session creation for users with MFA enrolled; require enrolment for platform staff and organization owners; recovery procedure. Also make mark import follow the `saveMarks` rules (plan open, assigned teacher). | SEC-002, A.4, EXM-003 |
-| J.1 | **Make a new school usable.** Fix the provisioning wizard (role name `Campus Admin` vs `Campus Administrator`, show or email the temporary password, create a subscription from the chosen plan). Create standard roles at provisioning. | TEN-004, P0-7 |
-| J.2 | **Setup-data screens.** Academic years and terms, grade levels, sections, subjects, grade scales, assessment plans and components, attendance codes, leave types and balances, departments and positions, rooms. Wire the existing `cloneCampusConfig` with its preview. Make the Setup checklist items link to these. | CFG-001/002, ACD-001, EXM-001, HR-staff, ATT-005 |
-| J.3 | **Approvals inbox.** List pending approval requests for the approver, approve or reject with a reason, execute the approved action (`approveRefund`, requisition approval); notify the requester. | IAM-003, FEE-004, INV-req |
-| J.4 | **Leave requests and separations.** Staff submit leave requests; HR initiates separation checklists. | ATT-005, HR-leave, HR-separation |
-| J.5 | **Safeguarding and health screens.** Case detail page (`/portal/safeguarding/[id]`), open case, add note, close case; edit health record; report incident. | SAF-case, HLT-record, HLT-incident |
-| J.6 | **Transport screens.** Create vehicles, routes, stops and assignments; the trip recording page (`/portal/transport/trip`). | TRP-fleet, TRP-trip, TRP-notify |
-| J.7 | **Inventory screens.** Items, categories, warehouses, suppliers; stock adjustment; the requisition form (`/portal/inventory/requisition/new`); purchase orders; asset assignment. | INV-stock, INV-req, INV-po, INV-asset |
-| J.8 | **Library reservations and renewals.** | LIB-reserve, LIB-circ |
-| J.9 | **Student records.** Register documents (feeds the expiry cron); bulk reassign section; assign a fee structure or discount to a student; use pickers instead of typed record ids on the bulk and issue forms. | SIS-004, SIS-005, FEE-001 |
-| J.10 | **Bank reconciliation.** Import a statement; match, unmatch and exception queue. | FEE-003, FEE-005 |
-| J.11 | **Assessment gaps.** Competency and conduct ratings; the timetable slot editor (`/portal/academics/timetable/[id]/slot/new`) so conflict detection is reachable. | EXM-005, ACD-002 |
-| J.12 | **School-owner user and role management** with a permission preview and an effective-access report. | IAM-001, A.1 |
-| J.13 | **Regression guards.** A test that fails when an internal link points at a route that does not exist, and a script that fails CI when an exported server action has no caller. | Prevents recurrence |
-| J.14 | **Production readiness.** Baseline migration from the current schema; switch deployment to `prisma migrate deploy`. | P0-1, 0.1 |
+| Slice | What | Unblocks | Status 2026-11-20 |
+| --- | --- | --- | --- |
+| J.0 | **Enforce two-factor at sign-in.** Add a challenge step between the password check and session creation for users with MFA enrolled; require enrolment for platform staff and organization owners; recovery procedure. Also make mark import follow the `saveMarks` rules (plan open, assigned teacher). | SEC-002, A.4, EXM-003 | ✅ |
+| J.1 | **Make a new school usable.** Fix the provisioning wizard (role name `Campus Admin` vs `Campus Administrator`, show or email the temporary password, create a subscription from the chosen plan). Create standard roles at provisioning. | TEN-004, P0-7 | ✅ |
+| J.2 | **Setup-data screens.** Academic years and terms, grade levels, sections, subjects, grade scales, assessment plans and components, attendance codes, leave types and balances, departments and positions, rooms. Wire the existing `cloneCampusConfig` with its preview. Make the Setup checklist items link to these. | CFG-001/002, ACD-001, EXM-001, HR-staff, ATT-005 | ✅ (positions have no screen yet) |
+| J.3 | **Approvals inbox.** List pending approval requests for the approver, approve or reject with a reason, execute the approved action (`approveRefund`, requisition approval); notify the requester. | IAM-003, FEE-004, INV-req | ✅ |
+| J.4 | **Leave requests and separations.** Staff submit leave requests; HR initiates separation checklists. | ATT-005, HR-leave, HR-separation | ✅ |
+| J.5 | **Safeguarding and health screens.** Case detail page (`/portal/safeguarding/[id]`), open case, add note, close case; edit health record; report incident. | SAF-case, HLT-record, HLT-incident | ✅ |
+| J.6 | **Transport screens.** Create vehicles, routes, stops and assignments; the trip recording page (`/portal/transport/trip`). | TRP-fleet, TRP-trip, TRP-notify | ✅ |
+| J.7 | **Inventory screens.** Items, categories, warehouses, suppliers; stock adjustment; the requisition form (`/portal/inventory/requisition/new`); purchase orders; asset assignment. | INV-stock, INV-req, INV-po, INV-asset | ✅ |
+| J.8 | **Library reservations and renewals.** | LIB-reserve, LIB-circ | ✅ |
+| J.9 | **Student records.** Register documents (feeds the expiry cron); bulk reassign section; assign a fee structure or discount to a student; use pickers instead of typed record ids on the bulk and issue forms. | SIS-004, SIS-005, FEE-001 | ✅ (documents, bulk, fee assignment; pickers on the issue and bulk forms) |
+| J.10 | **Bank reconciliation.** Import a statement; match, unmatch and exception queue. | FEE-003, FEE-005 | ✅ |
+| J.11 | **Assessment gaps.** Competency and conduct ratings; the timetable slot editor (`/portal/academics/timetable/[id]/slot/new`) so conflict detection is reachable. | EXM-005, ACD-002 | ✅ |
+| J.12 | **School-owner user and role management** with a permission preview and an effective-access report. | IAM-001, A.1 | ⬜ not started |
+| J.13 | **Regression guards.** A test that fails when an internal link points at a route that does not exist, and a script that fails CI when an exported server action has no caller. | Prevents recurrence | ✅ `static-guards.test.ts` (runs in `npm test`) |
+| J.14 | **Production readiness.** Baseline migration from the current schema; switch deployment to `prisma migrate deploy`. | P0-1, 0.1 | ⬜ baseline migration still required |
 
 ---
 

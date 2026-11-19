@@ -328,3 +328,28 @@ through the platform console is therefore an empty shell. The full list is the
 "Reachability gaps" section of [REQUIREMENTS_TRACEABILITY.md](REQUIREMENTS_TRACEABILITY.md).
 The working rule going forward: a feature is not done until a screen calls its
 action.
+
+## Server-action rules (enforced by tests, added 2026-11-20)
+
+Most defects found in the completion pass were one mistake: a server action trusting something
+the browser sent. The rules below are now conventions, and the first four are checked by
+`tests/unit/static-guards.test.ts`.
+
+1. A `"use server"` file exports only async functions. Constants and helpers live in `src/lib`.
+2. No exported action takes a school id (`tenantId`) as an argument. The school comes from the
+   signed-in user.
+3. Every exported action has a caller. An action nothing calls is dead code or a missing screen.
+4. Every `/portal` link points at a page that exists.
+5. **Derive, don't accept.** Look the record up by id within the user's school, then take the
+   campus (and any related ids) from that record, never from the form. Check the permission
+   against that campus.
+6. Validate the whole request before writing anything, and write in one transaction. For counted
+   or one-time effects (receiving a purchase order, issuing a requisition, reversing a payment,
+   issuing a copy) claim the state with a conditional `updateMany` first, so two simultaneous
+   clicks cannot both succeed.
+7. Bulk operations take `mode=preview|commit`. Only the literal `commit` writes.
+8. Sensitive reads (health records, safeguarding cases) are audited; audit metadata names fields
+   and ids, never the sensitive content.
+9. Parents and students reach a child only through `lib/family.ts`; staff permissions never grant
+   family access, and fee data is limited to the paying or primary guardian.
+

@@ -257,52 +257,27 @@ Safeguarding. Dedicated `safeguardingOfficerRole` seeded for demo.
 | Production migrations | `prisma/migrations` stops at 11 September; later schema changes were applied with `db push`. A fresh baseline migration is needed before a production deployment |
 | HOM / MOB native apps, local/offline/hybrid editions, sync, licensing | Out of scope for the web-only pass |
 
-## Reachability gaps (found 2026-11-18)
+## Reachability gaps — status 2026-11-20
 
-These are not deferred by design: the logic or the data model is there, but a user
-cannot reach it. They are the main remaining work.
+Found 2026-11-18, closed by 2026-11-20. Full account in [COMPLETION_REPORT.md](COMPLETION_REPORT.md).
 
-**Server actions with no caller (31 of 153).** Each is complete server logic
-(permission check, validation, audit) that no screen, form or other code invokes.
+- **Server actions with no caller (31 → 0).** Each was given a screen or removed. The static guard
+  `tests/unit/static-guards.test.ts` fails the unit run if an exported server action has no caller,
+  if a `/portal` link points at a missing page, if a `"use server"` file exports a non-function,
+  or if an action takes a school id as an argument.
+- **Dead links (4 → 0):** timetable slot editor, requisition form, safeguarding case page and trip
+  recording page now exist.
+- **Setup data with no creation path:** screens exist for academic years, terms, grades, sections,
+  subjects, grade scales, assessment plans, attendance codes, leave types, departments, rooms,
+  vehicles, routes, stops, inventory items, categories, suppliers and library categories.
+  Not covered: positions (only departments), staff loans and advances.
+- **Onboarding:** provisioning creates the admin role, an invite link, a trial subscription and
+  default data. School owners still cannot create users or roles themselves (IAM-001).
+- **Two-factor (SEC-002), mark-import rules (EXM-003), approvals (IAM-003):** fixed and tested.
 
-| Feature | Actions |
-|---|---|
-| Safeguarding cases | `openSafeguardingCase`, `addSafeguardingNote`, `closeSafeguardingCase` |
-| Health | `upsertHealthRecord`, `reportHealthIncident` |
-| Transport trips | `recordTrip` |
-| Inventory | `submitRequisition`, `adjustStock`, `createPurchaseOrder`, `receivePurchaseOrder`, `assignAsset`, `returnAsset` |
-| Library | `reserveBook`, `fulfillReservation`, `cancelReservation`, `returnBook` (superseded by the barcode return) |
-| Bank import and reconciliation | `importBankStatement`, `reconcilePayments` |
-| Approvals | `approveRefund` (and `resolveApproval` in `lib/approvals.ts`) |
-| Leave and HR | `requestLeave`, `approvLeave` (near-duplicate of `approveLeaveHr`), `initiateSeparation`, `recordPayrollInput` (superseded by payroll runs) |
-| Students | `registerStudentDocument`, `bulkReassignSection` |
-| Setup | `cloneCampusConfig`, `cloneCampusTemplate` |
-| Assessment | `saveCompetencyRatings`, `ensureDefaultCompetencies` |
-| Timetable | `addTimetableSlot` |
-| Settings | `getCampusSettings` (a getter; not a user-facing gap) |
-
-**Links to pages that do not exist (4).** `/portal/academics/timetable/[id]/slot/new`
-(timetable page), `/portal/inventory/requisition/new` (inventory page),
-`/portal/safeguarding/[id]` (safeguarding page) and `/portal/transport/trip`
-(transport page). They return 404. The "Match manually" label on the bank
-reconciliation page is also plain text, not a control.
-
-**Data with no creation path in the app (seed or SQL only).** Academic years, terms,
-grade levels and sections (only the unwired clone actions create them); subjects;
-grade scales, assessment plans and components; attendance codes; leave types and
-balances; departments and positions; rooms; vehicles, routes, stops and route
-assignments; inventory items, categories, warehouses and suppliers; library
-categories; student fee assignments and discounts; staff loans and advances.
-Until screens exist, a school created through the platform console is an empty
-shell that someone has to populate by script (the one-off `scripts/populate-campus.ts`
-exists for exactly that reason).
-
-**Onboarding and user management.** The provisioning wizard has the defects listed
-under TEN-004. A school owner cannot create users or roles; only platform operators can,
-from the tenant page.
-
-## Other defects found 2026-11-18
-
-- **Two-factor authentication is not enforced at sign-in** (SEC-002). Enrolment, verification and disabling work, but no login step asks for the code, so enrolling gives a false sense of security. Needs a challenge step between the password check and session creation.
-- **Mark import bypasses `saveMarks` rules** (EXM-003): it does not require the plan to be open, and does not restrict a user to the subjects they are assigned to teach.
-- **Refund and requisition approvals can be requested but never resolved** (IAM-003), and the provisioning wizard leaves a new school without a role, a visible password or a subscription (TEN-004). Both are described above.
+Requirement rows above that say "view only", "no screen" or "unwired" for the following were
+true on 2026-11-18 and are no longer: SAF case pages, HLT records and incidents, TRP fleet and trips,
+INV stock, requisitions, purchase orders and assets, LIB reservations and renewals, FEE-003 and
+FEE-005 bank import and matching, FEE-004 refund approval, ATT-005 leave, SIS-004 documents,
+SIS-005 bulk reassign, EXM-005 competencies, ACD-002 timetable slots, CFG-002 campus clone.
+Treat the completion report as the source of truth where this table and it disagree.

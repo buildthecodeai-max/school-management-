@@ -46,24 +46,26 @@ row-by-row status and [Known limitations](#known-limitations) for the summary.
 | Module | Where | Highlights |
 | --- | --- | --- |
 | Admissions | `/portal/admissions`, public `/apply/<school>` | Public inquiry form, pipeline board, checklist-gated stages, assessments and interviews, versioned offers, duplicate detection, one-step conversion into student + guardian + enrollment + portal account |
-| Students | `/portal/students` | Longitudinal profiles, guardians with custody/pickup/financial flags, enrollment history, transfer / withdraw / alumni / re-enrol, payments and refund requests from the student page, bulk grade promotion with preview, duplicate-record merge |
-| Attendance | `/portal/attendance` | Per-section registers, draft / submit / lock with privileged amend, guardian alerts, analytics (leave approvals are under HR) |
-| Academics | `/portal/academics`, `/portal/calendar` | Years, terms, grades, sections and subjects (view only); timetable versions with publish; teacher assignment and substitutes; lesson plans and homework; school calendar |
-| Assessment | `/portal/exams` | Marks grid for existing assessment plans, moderation → approval → publication, immutable versioned report cards, exam scheduling with seating and invigilators, CSV mark import |
-| Fees | `/portal/fees` | Fee heads and structures, installments, idempotent billing runs, invoices, payments with FIFO allocation and receipts, credit notes, write-offs and payment plans, fee reports, GL journal export. Refund requests are recorded but cannot yet be approved; bank import and matching have no screen |
+| Students | `/portal/students` | Longitudinal profiles, guardians with custody/pickup/financial flags, enrollment history, transfer / withdraw / alumni / re-enrol, documents with expiry flags, payments and refund requests from the student page, bulk year-end promotion and section moves (preview first, capacity and consistency checked), duplicate-record merge |
+| Attendance | `/portal/attendance` | Per-section registers for any date within a week (older needs amend rights), validated marks, draft / submit / lock, amendments with a required reason and visible history, guardian alerts, reports by student and an absence/late log with CSV, analytics, student leave requests from parents with approval (approved leave pre-fills the register) |
+| Academics | `/portal/academics`, `/portal/calendar` | Full configuration screens (years, terms, grades, sections, subjects, rooms, grade scales, attendance codes, leave types, departments); timetable versions with a slot editor, conflict detection and publish; teacher assignment and substitutes; lesson plans and homework; school calendar |
+| Assessment | `/portal/exams` | Assessment plan creation, validated atomic marks entry, enforced workflow (enter → submit → approve → publish, maker-checker), tie-aware ranks, immutable versioned report cards (printable) with competency ratings and conduct, exam scheduling with seating and invigilators, CSV mark import |
+| Fees | `/portal/fees` | Fee heads and structures, student fee assignment and discounts (bulk with preview), installments, idempotent billing runs, invoices, payments with FIFO allocation, per-payment printable receipts, payment reversal, credit notes, write-offs, payment plans, refunds through the approvals inbox (limited to unapplied credit), filtered fee reports with CSV (collections, overdue and aging, discounts, refunds, ledger), bank-statement import with auto and manual reconciliation, GL journal export |
 | Finance | `/portal/finance` | Operational ledger: accounts, categories, funds, income and expense transactions |
-| HR | `/portal/hr` | Staff directory and add-staff, leave approvals, staff attendance, payroll runs with payslips, recruitment pipeline with hire-to-staff. Departments and positions, leave requests and separations have no screen yet |
-| Library | `/portal/library` | Catalog and copies, add book, issue and return by barcode, flat late fine. No reservations or renewals yet |
-| Transport | `/portal/transport` | **View only:** fleet, routes, stops and assigned students. Nothing creates them or records trips yet |
-| Inventory | `/portal/inventory` | **View only:** stock against reorder levels and active requisitions |
-| Health and safeguarding | `/portal/health`, `/portal/safeguarding` | **View only:** health records and safeguarding case lists under dedicated permissions that campus admins and teachers do not hold by default. Creating and editing is not built yet |
+| HR | `/portal/hr` | Staff directory and add-staff, leave requests and approvals, staff attendance, payroll runs with payslips, recruitment pipeline with hire-to-staff, separation checklists |
+| Library | `/portal/library` | Catalog and copies, issue and return by barcode, renewals (max 2), reservation queue with notifications, per-day late fines that staff can pay or waive, damaged returns, readers see their own loans |
+| Transport | `/portal/transport` | Fleet, routes, stops, student assignment with seat limits, trip attendance with guardian alerts |
+| Inventory | `/portal/inventory` | Catalog, suppliers, stock adjustment (never below zero), requisitions through approvals then issue, purchase orders (send, receive exactly once, cancel), asset assignment, low-stock alerts to the people who can restock |
+| Health and safeguarding | `/portal/health`, `/portal/safeguarding` | Health records and incidents; safeguarding cases with an append-only record, reasoned status changes, and audited views, under dedicated permissions that campus admins and teachers do not hold by default |
 | Hostel, certificates, ID cards | `/portal/hostel`, `/portal/certificates` | Hostel assignments; certificate issuing and student ID cards |
 | Communication | `/portal/messages`, `/portal/notifications` | In-app inbox, delivery log with retry, per-language templates, daily digest, per-user preferences |
 | Reports | `/portal/reports` | CSV and XLSX exports and print views (income and expenses, posted payroll, enrollment by section) |
-| Setup and import | `/portal/setup`, `/portal/import` | Launch-readiness checklist, CSV student and marks import (mapping, validation, preview, all-or-nothing commit), organization and campus settings. Entering the academic structure and cloning a campus have no screen yet |
+| Setup and import | `/portal/setup`, `/portal/import` | Launch-readiness checklist, campus configuration clone (preview, then copy), CSV student and marks import (mapping, validation, preview, all-or-nothing commit), organization and campus settings |
 | Integrations | `/portal/integrations` | API clients, outbound webhooks, inbound payment-gateway webhook |
 | Subscription | `/portal/billing` | Plan, entitlements and usage against limits (view only) |
 | Platform console | `/portal/platform` | Tenant provisioning, suspension, support impersonation, data export and offboarding, plans, platform audit log |
+| Family portal | `/portal/family` | For guardians and students: per-child attendance, results, timetable, leave requests, and (paying or primary guardian only) fees and receipts |
+| Approvals | `/portal/approvals` | Inbox for refunds and requisitions with maker-checker (the requester cannot approve their own) |
 | Account | `/portal/account` | Change password, two-factor authentication, notification and language preferences |
 
 ### Cross-cutting
@@ -73,10 +75,9 @@ row-by-row status and [Known limitations](#known-limitations) for the summary.
   never from the client. A user can hold different roles on different campuses.
 - **Access control.** An atomic permission catalog, custom roles, and role assignments at
   `PLATFORM`, `ORG` or `CAMPUS` scope. Deny by default, enforced on the server. High-risk
-  actions (refund requests, requisitions) are routed through an approval request; the screen
-  that approves them is not built yet.
+  actions (refunds, requisitions) are routed through the approvals inbox.
 - **Security.** Database-backed sessions in `httpOnly`, `SameSite=Lax` cookies (`Secure` in
-  production), bcrypt password hashing, TOTP two-factor enrolment (not yet checked at sign-in), login rate
+  production), bcrypt password hashing, TOTP two-factor enforced at sign-in for enrolled users, login rate
   limiting, a breached-password check at sign-in, self-service password reset, and support
   impersonation with a visible banner and audit trail.
 - **Audit.** An append-only, hash-chained audit log; `npm run audit:verify` checks the chains.
@@ -210,10 +211,20 @@ lags the schema (see [Known limitations](#known-limitations)). Use `db:push` in 
 | Integration | `tests/integration/` | `npm run db:up`, then `npm run test:integration`. Runs against the real database in `DATABASE_URL`, creating and then deleting throwaway `itest_` tenants. |
 | End to end | `tests/e2e/` | Start the app with `npm run dev` on a seeded database, install a browser once with `npx playwright install chromium`, then `npm run test:e2e`. Set `TEST_BASE_URL` if the app is not on port 3000. |
 
-Integration tests cover tenant isolation, campus switching, search scoping, the audit chain,
-the student-record merge and inbound payment-webhook processing. Unit tests cover money,
-permissions, exams, timetable, reports, translations, recruitment stage rules and webhook
-signature checks.
+Integration tests (139) cover tenant isolation, campus switching, search scoping, the audit chain,
+sign-in with two-factor, school provisioning, academic configuration, approvals, fee assignment,
+reports and payment reversal, attendance, exams workflow, timetable and competencies, transport,
+inventory, health and safeguarding, library, bank reconciliation, the family portal, bulk student
+actions, campus clone and separation checklists. Unit tests (142) cover money, permissions, exams,
+timetable, reports, translations, recruitment rules, parsing and matching of bank statements,
+library and fee-report rules, and **static guards** (`tests/unit/static-guards.test.ts`) that fail
+when a `"use server"` file exports anything but functions, an internal link points at a page
+that does not exist, a server action has no caller, or an action takes a school id as an argument.
+
+**End-to-end specs are stale.** `tests/e2e/` still signs in with `*@greenwood.edu` demo accounts
+that the current seed no longer creates (it creates `*@hmss.edu`), and the specs write records,
+so they have not been run in this pass. Update the accounts and run them against a disposable
+database before relying on them.
 
 Type-check with `npx tsc --noEmit` (currently clean). `npm run build` also type-checks every
 `.ts` file in the repository, including `scripts/`, so a type error in a one-off script fails
@@ -368,23 +379,16 @@ Key files in `src/lib`:
 
 ## Known limitations
 
-Known gaps, so nothing here is a surprise. The first four are defects or unfinished work
-found in a code audit on 2026-11-18, not deliberate omissions; the full lists are in
-[docs/REQUIREMENTS_TRACEABILITY.md](docs/REQUIREMENTS_TRACEABILITY.md#reachability-gaps-found-2026-11-18).
+Known gaps, so nothing here is a surprise. The full list and rationale are in
+[docs/COMPLETION_REPORT.md](docs/COMPLETION_REPORT.md).
 
-- **Some modules are view-only or have no screen for logic that already exists.** 31 of 153
-  server actions are not called from any screen (for example leave requests, safeguarding cases,
-  health records, trip recording, inventory, library reservations, bank-statement import,
-  refund approval), and four links lead to pages that do not exist.
-- **A new school cannot be set up from the UI alone.** Nothing creates academic years, terms,
-  grades, sections, subjects, grade scales, assessment plans, attendance codes, leave types,
-  departments or positions; the demo school works because the seed creates them. The
-  "Add a school" wizard also leaves the new admin without a role or a visible password and
-  creates no subscription.
-- **Two-factor authentication is not enforced.** You can enrol an authenticator app, but the
-  sign-in page never asks for the code.
-- **CSV mark import skips rules that manual entry applies** (the plan must be open; only the
-  subject's assigned teacher may enter marks).
+- **Student and guardian portals** cover the child hub (attendance, results, timetable, fees,
+  leave). Not built: online fee payment, messaging with teachers, a mobile layout review.
+- **Payment reversal and refunds take effect on one person's say-so** (permission plus a reason, audited).
+  Refunds go through the approvals inbox; reversals do not.
+- **Attendance is daily only.** Period- and subject-level registers and trend charts are not built.
+- **Report cards** are printable HTML; there is no PDF generator or template editor.
+- **Several modules are thin on reporting** (inventory valuation, transport costs, library statistics).
 - **Email, SMS and push are console stand-ins.** The providers in
   `src/lib/notification-providers.ts` log instead of sending. Implement the `NotificationProvider`
   interface with a real service (SES, Twilio, FCM and so on) to deliver for real.
@@ -394,8 +398,9 @@ found in a code audit on 2026-11-18, not deliberate omissions; the full lists ar
 - **Payment gateway.** Only the generic signed webhook exists; there are no provider-specific
   adapters.
 - **Database migrations lag the schema.** `prisma/migrations` stops at 11 September 2026.
-  Later changes (recruitment, gateway webhooks, per-user and per-template languages, password
-  reset, tenant offboarding and more) were applied with `db push`. **Before any production deployment, create a fresh baseline
+  Every later change (recruitment, gateway webhooks, languages, password reset, offboarding,
+  MFA sessions, attendance amendments, bank-line constraints, library and inventory cascades
+  and more) was applied with `db push`. **Before any production deployment, create a fresh baseline
   migration from the current schema.**
 - **The breached-password check calls an external service** (Have I Been Pwned, using
   k-anonymity: only a 5-character hash prefix leaves the server) at sign-in. It fails open if the
@@ -417,7 +422,8 @@ found in a code audit on 2026-11-18, not deliberate omissions; the full lists ar
 
 | Document | What it is |
 | --- | --- |
+| [docs/COMPLETION_REPORT.md](docs/COMPLETION_REPORT.md) | **Current status.** What is complete, partial and missing, defects fixed, test results and remaining risks (2026-11-20) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The load-bearing design decisions: tenancy, authorization, data conventions, notifications, API |
 | [docs/REQUIREMENTS_TRACEABILITY.md](docs/REQUIREMENTS_TRACEABILITY.md) | Requirement-by-requirement status and the list of deferred items |
 | [docs/FEATURE_REFERENCE.md](docs/FEATURE_REFERENCE.md) | Module-by-module feature reference |
-| [docs/FEATURE_GAP_AUDIT.md](docs/FEATURE_GAP_AUDIT.md), [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Planning notes from earlier in the project (dated; the traceability document is the current status) |
+| [docs/FEATURE_GAP_AUDIT.md](docs/FEATURE_GAP_AUDIT.md), [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Planning notes from earlier in the project (dated; the completion report is the current status) |

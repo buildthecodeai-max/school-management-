@@ -36,7 +36,9 @@ export function RegisterForm({
   initialMarks,
   date,
   needsReason,
+  leaveStudentIds = [],
 }: {
+  leaveStudentIds?: string[];
   date: string;
   needsReason: boolean;
   sectionId: string;
@@ -50,7 +52,9 @@ export function RegisterForm({
     // default everyone to Present when nothing recorded yet
     const base: Record<string, string> = { ...initialMarks };
     if (Object.keys(initialMarks).length === 0 && presentCode) {
-      students.forEach((s) => (base[s.id] = presentCode.id));
+      // Everyone starts Present, except students whose leave was approved for this day.
+      const leaveCode = codes.find((c) => c.category === "LEAVE");
+      students.forEach((s) => (base[s.id] = leaveCode && leaveStudentIds.includes(s.id) ? leaveCode.id : presentCode.id));
     }
     return base;
   });

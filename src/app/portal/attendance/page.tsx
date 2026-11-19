@@ -1,6 +1,6 @@
 import { ctxLocale, ctxTranslator } from "@/lib/i18n";
 import Link from "next/link";
-import { requirePermission } from "@/lib/rbac";
+import { requirePermission, canAnywhere } from "@/lib/rbac";
 import { prisma } from "@/lib/db";
 import { allowedCampusIds } from "@/lib/scope";
 import { dayStart, dayEnd } from "@/lib/dates";
@@ -35,6 +35,11 @@ export default async function AttendanceListPage() {
         subtitle={`${tr("Take and review today's registers")} · ${new Date().toLocaleDateString(ctxLocale(ctx), { weekday: "long", month: "long", day: "numeric" })}`}
         action={
           <div className="flex gap-2">
+            {canAnywhere(ctx, "attendance.leave.approve") && (
+              <ButtonLink href="/portal/attendance/leave" variant="ghost">
+                {tr("Student leave")}
+              </ButtonLink>
+            )}
             <ButtonLink href="/portal/attendance/reports" variant="ghost">
               {tr("Reports")}
             </ButtonLink>

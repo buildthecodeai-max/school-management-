@@ -70,6 +70,7 @@ interface NavItem {
   icon: ReactNode;
   perm?: PermissionKey;
   platformOnly?: boolean;
+  familyOnly?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -209,9 +210,12 @@ const NAV: NavItem[] = [
   { href: "/portal/certificates", label: "Certificates", icon: <GraduationCap size={18} />, perm: "student.write" },
   { href: "/portal/hostel", label: "Hostel", icon: <Building2 size={18} />, perm: "student.write" },
   { href: "/portal/hr/leave", label: "My leave", icon: <CalendarCheck size={18} />, perm: "attendance.leave.request" },
+  { href: "/portal/family", label: "My children", icon: <GraduationCap size={18} />, familyOnly: true },
   { href: "/portal/approvals", label: "Approvals", icon: <ShieldCheck size={18} /> },
   { href: "/portal/reports", label: "Reports", icon: <ClipboardCheck size={18} /> },
 ];
+
+import { familyLinks } from "@/lib/family";
 
 export async function PortalShell({
   ctx,
@@ -223,7 +227,9 @@ export async function PortalShell({
   const user = ctx.user;
   const locale = resolveUiLocale(user.locale, user.tenant?.locale);
   const tr = translator(locale);
+  const hasFamily = ctx.tenantId ? (await familyLinks(ctx)).length > 0 : false;
   const items = NAV.filter((item) => {
+    if (item.familyOnly) return hasFamily;
     if (item.platformOnly) return ctx.isPlatformStaff;
     // Tenant-scoped destinations are unreachable without a tenant row, so
     // platform staff only see the platform console entries.

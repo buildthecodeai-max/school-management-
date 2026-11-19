@@ -39,7 +39,9 @@ describe("school provisioning", () => {
     expect(await prisma.attendanceCode.count({ where: { tenantId: r.tenantId } })).toBe(4);
     const scale = await prisma.gradeScale.findFirstOrThrow({ where: { tenantId: r.tenantId }, include: { bands: true } });
     expect(scale.bands.some((b) => b.minPercent === 0 && !b.isPass)).toBe(true);
-    expect(await prisma.leaveType.count({ where: { tenantId: r.tenantId } })).toBe(2);
+    expect(await prisma.leaveType.count({ where: { tenantId: r.tenantId, appliesTo: "STAFF" } })).toBe(2);
+    // parents can report an absence from day one
+    expect(await prisma.leaveType.count({ where: { tenantId: r.tenantId, appliesTo: "STUDENT" } })).toBe(2);
   });
 
   it("is idempotent: running again does not duplicate anything", async () => {

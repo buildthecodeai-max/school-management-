@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import type { AuthzContext } from "@/lib/rbac";
 import { formatMoney } from "@/lib/money";
 import { StatCard, Card, PageHeader, Badge } from "@/components/ui";
+import { feeVisibility } from "@/lib/family";
 
 export async function GuardianDashboard({
   ctx,
@@ -134,15 +135,20 @@ export async function GuardianDashboard({
                     value={recentAbsences}
                     tone={recentAbsences > 0 ? "amber" : "slate"}
                   />
-                  <StatCard
-                    label={tr("Fee balance")}
-                    value={formatMoney(feeBalance)}
-                    tone={feeBalance > 0 ? "amber" : "green"}
-                    hint={link.financiallyResponsible ? tr("you are fee payer") : undefined}
-                  />
+                  {feeVisibility(link) && (
+                    <StatCard
+                      label={tr("Fee balance")}
+                      value={formatMoney(feeBalance)}
+                      tone={feeBalance > 0 ? "amber" : "green"}
+                      hint={link.financiallyResponsible ? tr("you are fee payer") : undefined}
+                    />
+                  )}
                 </div>
 
-                <div className="mt-3 flex gap-4 border-t border-[color:var(--color-line)] pt-3 text-sm">
+                <div className="mt-3 flex flex-wrap gap-4 border-t border-[color:var(--color-line)] pt-3 text-sm">
+                  <Link href={`/portal/family/${link.student.id}`} className="font-medium text-brand-700 hover:underline">
+                    {tr("Open full details →")}
+                  </Link>
                   {latestResult ? (
                     <Link
                       href={`/portal/exams/${latestResult.version.planId}/report/${link.student.id}`}

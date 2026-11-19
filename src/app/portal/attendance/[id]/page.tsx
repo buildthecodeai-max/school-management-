@@ -56,6 +56,14 @@ export default async function RegisterPage({
     }),
   ]);
 
+  // Students with approved leave covering this day (UTC-midnight dates, as entered by the family).
+  const leaveDay = new Date(`${dayStr}T00:00:00.000Z`);
+  const onLeave = await prisma.leaveRequest.findMany({
+    where: { tenantId: ctx.tenantId!, status: "APPROVED", staffId: null, startDate: { lte: leaveDay }, endDate: { gte: leaveDay }, person: { student: { enrollments: { some: { sectionId: section.id, status: "ACTIVE" } } } } },
+    select: { person: { select: { student: { select: { id: true } } } } },
+  });
+  const leaveStudentIds = onLeave.map((l) => l.person.student!.id);
+
   const existingMarks: Record<string, string> = {};
   session?.records.forEach((r) => {
     existingMarks[r.studentId] = r.codeId;
@@ -154,6 +162,7 @@ export default async function RegisterPage({
           admissionNumber: e.student.admissionNumber,
         }))}
         initialMarks={existingMarks}
+        leaveStudentIds={leaveStudentIds}
         date={dayStr}
         needsReason={needsReason}
         key={dayStr + status}

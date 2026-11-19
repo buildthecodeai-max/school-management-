@@ -29,6 +29,12 @@ export default async function DashboardPage() {
     }
   }
 
+  // A student signed in to their own account goes to their own page.
+  if (ctx.user.personId && !can(ctx, "student.read") && !canAnywhere(ctx, "student.read")) {
+    const own = await prisma.student.findFirst({ where: { personId: ctx.user.personId, tenantId: ctx.tenantId! }, select: { id: true } });
+    if (own) redirect(`/portal/family/${own.id}`);
+  }
+
   // Role-scoped dashboard routing (UX). These use `canAnywhere` because the
   // finance/admissions roles are granted per-campus, and `can()` only sees
   // org-wide grants — with it, both roles fell through to StaffDashboard.

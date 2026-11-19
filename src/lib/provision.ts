@@ -105,6 +105,9 @@ export async function provisionSchool(input: ProvisionInput) {
       data: [
         { tenantId: tenant.id, name: "Annual leave", daysPerYear: 21, isPaid: true, appliesTo: "STAFF" },
         { tenantId: tenant.id, name: "Sick leave", daysPerYear: 10, isPaid: true, appliesTo: "STAFF" },
+        // Students: untracked (0 = no entitlement limit) so parents can report absences from day one.
+        { tenantId: tenant.id, name: "Student sick day", daysPerYear: 0, isPaid: true, appliesTo: "STUDENT" },
+        { tenantId: tenant.id, name: "Family reason", daysPerYear: 0, isPaid: true, appliesTo: "STUDENT" },
       ],
       skipDuplicates: true,
     });

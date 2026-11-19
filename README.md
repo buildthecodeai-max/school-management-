@@ -187,7 +187,10 @@ sessions are random tokens stored in the database, so there is no signing key.
 | `npm run dev` | Start the dev server on port 3000 |
 | `npm run build` / `npm start` | Production build / serve it |
 | `npm run db:up` / `npm run db:down` | Start / stop the PostgreSQL container |
-| `npm run db:push` | Apply `schema.prisma` to the database (what development uses) |
+| `npm run db:push` | Apply `schema.prisma` to the database (quick local development) |
+| `npm run db:migrate` | Create a migration from schema changes (do this for anything that will ship) |
+| `npm run db:deploy` | Apply the committed migrations (production, CI, fresh environments) |
+| `npm run db:drift` | Fail if `schema.prisma` has changes that no migration contains (needs `SHADOW_DATABASE_URL`, see `.env.example`) |
 | `npm run db:generate` | Regenerate the Prisma client |
 | `npm run db:seed` | **Wipe** the database and load the demo school |
 | `npm run setup` | `db:up` + schema push + seed |
@@ -198,8 +201,8 @@ sessions are random tokens stored in the database, so there is no signing key.
 | `npm run audit:verify` | Verify the audit-log hash chains |
 | `npm run audit:backfill` | Backfill hash chains for older audit rows |
 
-`npm run db:reset` and `npm run db:migrate` go through `prisma/migrations`, which currently
-lags the schema (see [Known limitations](#known-limitations)). Use `db:push` in development.
+`npm run db:reset` rebuilds the database from `prisma/migrations`, which now match the schema.
+For a quick local loop `db:push` is still fine; run `db:migrate` before you commit a schema change.
 
 ---
 
@@ -397,11 +400,12 @@ Known gaps, so nothing here is a surprise. The full list and rationale are in
 - **Scheduled jobs are not self-triggering.** The cron endpoints need an external scheduler.
 - **Payment gateway.** Only the generic signed webhook exists; there are no provider-specific
   adapters.
-- **Database migrations lag the schema.** `prisma/migrations` stops at 11 September 2026.
-  Every later change (recruitment, gateway webhooks, languages, password reset, offboarding,
-  MFA sessions, attendance amendments, bank-line constraints, library and inventory cascades
-  and more) was applied with `db push`. **Before any production deployment, create a fresh baseline
-  migration from the current schema.**
+- **Migrations are caught up, but new schema changes need one.** `prisma/migrations` now
+  reproduces the current schema exactly (verified: a fresh database built only from the migrations
+  has no difference from `schema.prisma`). In development you can still use `db push`, but
+  every schema change that ships needs a migration (`npm run db:migrate`), and `npm run db:drift`
+  fails when `schema.prisma` has changes no migration contains. Production uses
+  `npm run db:deploy`.
 - **The breached-password check calls an external service** (Have I Been Pwned, using
   k-anonymity: only a 5-character hash prefix leaves the server) at sign-in. It fails open if the
   service is unreachable.

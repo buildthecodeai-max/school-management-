@@ -17,7 +17,7 @@ the matrix in `FEATURE_GAP_AUDIT.md` only after acceptance evidence exists.
 
 ## Status — 2026-11-20
 
-Phase J (below) is finished except J.12 and J.14. The table that follows is the 2026-11-18
+Phase J (below) is finished except J.12 (school-owner user and role management). The table that follows is the 2026-11-18
 snapshot; where it disagrees with the Phase J status column or with
 [COMPLETION_REPORT.md](COMPLETION_REPORT.md), those win. Changes since the snapshot: A.3
 approvals inbox ✅, A.4 MFA enforced ✅, C.4 bulk safety ✅ (preview, validation; still no rollback),
@@ -32,7 +32,7 @@ exists without a screen are covered by Phase J.
 
 | Slice | Status | Note |
 | --- | --- | --- |
-| 0.1 git + migrations | 🟡 | Git history exists and is on GitHub. Migrations not adopted; a baseline is needed before production |
+| 0.1 git + migrations | ✅ | Git history on GitHub; migrations caught up on 2026-11-20 and checked for drift (see J.14) |
 | 0.2 integration harness | ✅ | `tests/integration/`, 29 tests, single-threaded config |
 | 0.3 cross-tenant isolation suite | 🟡 | `isolation.test.ts` plus search, campus-switch and merge suites; not yet table-driven across every action and API route |
 | 0.4 cross-campus isolation suite | ✅ | Search and campus-switch regressions locked in |
@@ -108,7 +108,7 @@ check on the server, an audit entry, and a negative test.
 | J.11 | **Assessment gaps.** Competency and conduct ratings; the timetable slot editor (`/portal/academics/timetable/[id]/slot/new`) so conflict detection is reachable. | EXM-005, ACD-002 | ✅ |
 | J.12 | **School-owner user and role management** with a permission preview and an effective-access report. | IAM-001, A.1 | ⬜ not started |
 | J.13 | **Regression guards.** A test that fails when an internal link points at a route that does not exist, and a script that fails CI when an exported server action has no caller. | Prevents recurrence | ✅ `static-guards.test.ts` (runs in `npm test`) |
-| J.14 | **Production readiness.** Baseline migration from the current schema; switch deployment to `prisma migrate deploy`. | P0-1, 0.1 | ⬜ baseline migration still required |
+| J.14 | **Production readiness.** Baseline migration from the current schema; switch deployment to `prisma migrate deploy`. | P0-1, 0.1 | ✅ catch-up migration `20261120000000`, verified against a fresh database; `db:deploy` and `db:drift` scripts |
 
 ---
 

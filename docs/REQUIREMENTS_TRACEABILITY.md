@@ -254,7 +254,7 @@ Safeguarding. Dedicated `safeguardingOfficerRole` seeded for demo.
 | Scheduled-job triggering (digest, document expiry) | The handlers exist and are protected by `CRON_SECRET`; actually calling them is external infrastructure (Vercel Cron, system cron) |
 | Real email/SMS/push delivery | `lib/notification-providers.ts` contains console stand-ins behind a swappable interface |
 | Portal translation beyond the shell, account, students, attendance, fees and the staff/guardian/finance/admissions dashboards | Those screens are translated into es/fr/pt/ar (RTL for Arabic) and the shell into sw/hi, with English fallback per string. Everything else, the platform dashboard, workflow-stage names and the sw/hi page bodies are untranslated. All translations are machine-drafted and need native review |
-| Production migrations | `prisma/migrations` stops at 11 September; later schema changes were applied with `db push`. A fresh baseline migration is needed before a production deployment |
+| Production migrations | Done 2026-11-20: `20261120000000_catch_up_to_schema` brings the migration history level with the schema (verified against a fresh database). New schema changes need their own migration; `npm run db:drift` checks |
 | HOM / MOB native apps, local/offline/hybrid editions, sync, licensing | Out of scope for the web-only pass |
 
 ## Reachability gaps — status 2026-11-20

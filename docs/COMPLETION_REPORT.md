@@ -56,7 +56,6 @@ clicking through them. Nothing was written to the demo data.
 ## Not done
 
 - **School-owner user and role management** with permission preview (IAM-001): only platform operators can create users and roles.
-- **Production migrations**: `prisma/migrations` stops at 11 September; every later schema change was applied with `db push`. A baseline migration is required before any production deploy.
 - Announcement composer, forms and surveys, emergency broadcast (E.1–E.4), subscription upgrade flow, usage metering and dunning (B.3–B.9), homeschool, native mobile, offline editions.
 - Non-functional evidence: load, accessibility, restore drills, observability.
 - Student photos and ID generation, emergency contact management, teacher and staff document upload.
@@ -98,7 +97,7 @@ Schema: deleting a school failed once it had trips, asset assignments, library o
 
 ## Remaining risks
 
-1. **Migrations**: see above; a deploy that relies on `prisma migrate deploy` today would not create the current schema.
+1. **Migrations**: closed on 2026-11-20 (`20261120000000_catch_up_to_schema`). A database built only from the migrations was compared with `schema.prisma` and with the development database and showed no difference. Remaining discipline: every future schema change needs a migration; `npm run db:drift` enforces it. Not tested: running `migrate deploy` against a database that already holds production data.
 2. **End-to-end specs are stale**, so the browser-level regression net is thin; most confidence comes from the integration tests and the static guards.
 3. **Screens driven only by tests** for the modules the demo school has no data for. Do a manual pass with real data before go-live.
 4. **Payment reversal has no second approver**, unlike refunds.

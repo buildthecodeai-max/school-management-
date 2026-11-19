@@ -303,10 +303,13 @@ typed to confirm, and the deletion audited before it runs.
 ## 13. Deployment posture
 
 Local dev uses Docker Postgres (`docker-compose.yml`, host port 5433). In
-development the schema is applied with `prisma db push`. The checked-in
-`prisma/migrations` stop at 11 September 2026 and no longer match
-`schema.prisma`, so **a fresh baseline migration is required before a production
-deployment**. The variables the code reads are `DATABASE_URL`, `CRON_SECRET`,
+development the schema can be applied with `prisma db push`. Production and any fresh
+environment use `prisma migrate deploy` (`npm run db:deploy`). The checked-in
+`prisma/migrations` reproduce `schema.prisma` exactly: the migration
+`20261120000000_catch_up_to_schema` brings the September history up to date, and a database
+built only from the migrations was verified to have no difference from the schema or from the
+development database. Every shipped schema change needs a migration; `npm run db:drift` fails
+when one is missing. The variables the code reads are `DATABASE_URL`, `CRON_SECRET`,
 `NEXT_PUBLIC_BASE_URL` and `NODE_ENV`.
 
 State that is per process today: the API and login rate limiters. Outbound calls

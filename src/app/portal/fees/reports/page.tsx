@@ -3,362 +3,271 @@ import { requirePermission } from "@/lib/rbac";
 import { allowedCampusIds } from "@/lib/scope";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
-import { PageHeader, Card, ButtonLink } from "@/components/ui";
+import { dayStart } from "@/lib/dates";
+import { parseDay, formatDay } from "@/lib/attendance";
+import { AGING_BUCKETS } from "@/lib/fee-report-calc";
+import { campusNames, collectionsReport, discountsReport, outstandingReport, refundsReport } from "@/lib/fee-reports";
+import { PageHeader, Card, Badge, ButtonLink, EmptyState } from "@/components/ui";
+import { inputCls, labelCls } from "@/components/ActionForm";
 
-type Tab = "outstanding" | "collections" | "concessions" | "ledger";
-
-function agingBucket(dueDate: Date) {
-  const days = Math.floor((Date.now() - dueDate.getTime()) / 864e5);
-  if (days <= 0) return "Current";
-  if (days <= 30) return "1–30 days";
-  if (days <= 60) return "31–60 days";
-  return "60+ days";
-}
-
-function agingColor(bucket: string) {
-  if (bucket === "Current") return "text-green-700";
-  if (bucket === "1–30 days") return "text-amber-700";
-  if (bucket === "31–60 days") return "text-orange-700";
-  return "text-red-700";
-}
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: "outstanding", label: "Outstanding" },
+const TABS = [
   { key: "collections", label: "Collections" },
-  { key: "concessions", label: "Concessions" },
+  { key: "outstanding", label: "Outstanding & overdue" },
+  { key: "discounts", label: "Discounts & write-offs" },
+  { key: "refunds", label: "Refunds" },
   { key: "ledger", label: "Student ledger" },
-];
+] as const;
+type Tab = (typeof TABS)[number]["key"];
+const METHODS = ["CASH", "BANK", "CARD", "WALLET", "CHEQUE", "GATEWAY", "IMPORT"];
 
 export default async function FeeReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; from?: string; to?: string; campusId?: string; method?: string; gradeLevelId?: string; admission?: string }>;
 }) {
   const ctx = await requirePermission("fee.read");
-  const campusIds = allowedCampusIds(ctx, "fee.read");
-  const params = await searchParams;
-  const tab: Tab = (TABS.some((t) => t.key === params.tab) ? params.tab : "outstanding") as Tab;
-  const campusFilter = campusIds ? { campusId: { in: campusIds } } : {};
+  const sp = await searchParams;
+  const allowed = allowedCampusIds(ctx, "fee.read");
+  const tab: Tab = TABS.some((t) => t.key === sp.tab) ? (sp.tab as Tab) : "collections";
+  const names = await campusNames(ctx.tenantId!);
+  const campusOptions = [...names].filter(([id]) => !allowed || allowed.includes(id));
+  const campusId = campusOptions.some(([id]) => id === sp.campusId) ? sp.campusId : undefined;
 
-  // Fetch campuses for display
-  const campuses = await prisma.campus.findMany({
-    where: { tenantId: ctx.tenantId!, ...(campusIds ? { id: { in: campusIds } } : {}) },
-    select: { id: true, name: true },
+  const today = dayStart();
+  const from = parseDay(sp.from) ?? new Date(today.getFullYear(), today.getMonth(), 1);
+  const to = parseDay(sp.to) ?? today;
+  const rangeError = from > to ? "The start date must not be after the end date." : null;
+  const method = METHODS.includes(sp.method ?? "") ? sp.method : undefined;
+  const grades = await prisma.gradeLevel.findMany({
+    where: { tenantId: ctx.tenantId!, ...(allowed ? { campusId: { in: allowed } } : {}) },
+    orderBy: [{ rank: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, campusId: true },
   });
-  const campusName = new Map(campuses.map((c) => [c.id, c.name]));
+  const gradeLevelId = grades.some((g) => g.id === sp.gradeLevelId) ? sp.gradeLevelId : undefined;
+  const scope = { tenantId: ctx.tenantId!, campusIds: allowed, campusId };
 
-  const [outstanding, collections, concessions, ledger] = await Promise.all([
-    tab === "outstanding"
-      ? prisma.invoice.findMany({
-          where: { tenantId: ctx.tenantId!, status: { in: ["OPEN", "PARTIAL"] }, ...campusFilter },
-          include: { student: { include: { person: true } } },
-          orderBy: { dueDate: "asc" },
-        })
-      : Promise.resolve([]),
+  const q = new URLSearchParams({ from: formatDay(from), to: formatDay(to) });
+  if (campusId) q.set("campusId", campusId);
+  if (method) q.set("method", method);
+  if (gradeLevelId) q.set("gradeLevelId", gradeLevelId);
+  const csv = (report: string) => `/api/portal/fees/reports/export?${q}&report=${report}`;
 
-    tab === "collections"
-      ? prisma.payment.findMany({
-          where: { tenantId: ctx.tenantId!, status: "CONFIRMED", ...campusFilter },
-          include: { student: { include: { person: true } } },
-          orderBy: { receivedAt: "desc" },
-          take: 300,
-        })
-      : Promise.resolve([]),
+  const data = rangeError ? null : {
+    collections: tab === "collections" ? await collectionsReport({ ...scope, from, to, method }) : null,
+    outstanding: tab === "outstanding" ? await outstandingReport({ ...scope, gradeLevelId, asOf: new Date() }) : null,
+    discounts: tab === "discounts" ? await discountsReport({ ...scope, from, to }) : null,
+    refunds: tab === "refunds" ? await refundsReport({ ...scope, from, to }) : null,
+  };
 
-    tab === "concessions"
-      ? prisma.creditNote.findMany({
-          where: {
-            tenantId: ctx.tenantId!,
-            ...(campusIds ? { invoice: { campusId: { in: campusIds } } } : {}),
-          },
-          include: { invoice: { include: { student: { include: { person: true } } } } },
-          orderBy: { createdAt: "desc" },
-          take: 300,
-        })
-      : Promise.resolve([]),
+  // Ledger: one student at a time, found by admission number.
+  let ledger: Awaited<ReturnType<typeof loadLedger>> = null;
+  async function loadLedger() {
+    const adm = sp.admission?.trim();
+    if (!adm) return null;
+    return prisma.student.findFirst({
+      where: { tenantId: ctx.tenantId!, admissionNumber: adm, ...(allowed ? { enrollments: { some: { campusId: { in: allowed } } } } : {}) },
+      include: { person: true, invoices: { orderBy: { issueDate: "desc" }, take: 50 }, payments: { orderBy: { receivedAt: "desc" }, take: 50 } },
+    });
+  }
+  if (tab === "ledger") ledger = await loadLedger();
 
-    tab === "ledger"
-      ? prisma.student.findMany({
-          where: { tenantId: ctx.tenantId!, enrollments: campusIds ? { some: { campusId: { in: campusIds }, status: "ACTIVE" } } : { some: { status: "ACTIVE" } } },
-          include: {
-            person: true,
-            invoices: { orderBy: { issueDate: "desc" }, take: 20 },
-            payments: { orderBy: { receivedAt: "desc" }, take: 20 },
-          },
-          take: 50,
-          orderBy: { person: { lastName: "asc" } },
-        })
-      : Promise.resolve([]),
-  ]);
-
-  const tabLinkCls = (k: Tab) =>
-    k === tab
-      ? "border-b-2 border-brand-700 pb-2 text-sm font-semibold text-brand-700"
-      : "pb-2 text-sm text-[color:var(--color-muted)] hover:text-[color:var(--color-text)]";
-
-  const thCls = "pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-[color:var(--color-muted)]";
-  const tdCls = "py-2 pr-4 text-sm";
-  const tdMuted = "py-2 pr-4 text-sm text-[color:var(--color-muted)]";
+  const th = "pb-2 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-[color:var(--color-muted)]";
+  const showDates = tab !== "outstanding" && tab !== "ledger";
+  const tabHref = (k: string) => `?${new URLSearchParams({ ...Object.fromEntries(q), tab: k })}`;
+  const Stat = ({ label, value }: { label: string; value: string }) => (
+    <Card><p className="text-xs text-[color:var(--color-muted)]">{label}</p><p className="text-2xl font-semibold">{value}</p></Card>
+  );
 
   return (
     <div>
-      <PageHeader
-        title="Fee reports"
-        subtitle="Aging, collections, concessions and student ledger."
-        action={
-          <ButtonLink href="/portal/fees" variant="ghost">
-            ← Fees
-          </ButtonLink>
-        }
-      />
+      <PageHeader title="Fee reports" subtitle="Collections, overdue balances, discounts, refunds and student ledgers" action={<ButtonLink href="/portal/fees" variant="ghost">← Fees</ButtonLink>} />
 
-      <div className="mb-6 flex gap-6 border-b border-[color:var(--color-line)]">
+      <div className="mb-4 flex flex-wrap gap-5 border-b border-[color:var(--color-line)]">
         {TABS.map((t) => (
-          <Link key={t.key} href={`?tab=${t.key}`} className={tabLinkCls(t.key)}>
-            {t.label}
-          </Link>
+          <Link key={t.key} href={tabHref(t.key)} className={t.key === tab ? "border-b-2 border-brand-700 pb-2 text-sm font-semibold text-brand-700" : "pb-2 text-sm text-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"}>{t.label}</Link>
         ))}
       </div>
 
-      {/* ── Outstanding ── */}
-      {tab === "outstanding" && (
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold">Outstanding invoices</h3>
-            <span className="text-sm text-[color:var(--color-muted)]">
-              {outstanding.length} invoice{outstanding.length !== 1 ? "s" : ""} ·{" "}
-              <strong>{formatMoney(outstanding.reduce((s, i) => s + i.balance, 0))}</strong> outstanding
-            </span>
-          </div>
-          {outstanding.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-muted)]">No outstanding invoices. All balances are settled.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className={thCls}>Invoice</th>
-                    <th className={thCls}>Student</th>
-                    <th className={thCls}>Campus</th>
-                    <th className={thCls}>Period</th>
-                    <th className={thCls}>Due date</th>
-                    <th className={thCls + " text-right"}>Balance</th>
-                    <th className={thCls + " text-right pr-0"}>Aging</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[color:var(--color-line)]">
-                  {outstanding.map((inv) => {
-                    const bucket = agingBucket(inv.dueDate);
-                    return (
-                      <tr key={inv.id}>
-                        <td className={tdCls}>
-                          <Link href={`/portal/fees/invoices/${inv.id}`} className="text-brand-700 hover:underline">
-                            {inv.number}
-                          </Link>
-                        </td>
-                        <td className={tdCls}>
-                          {inv.student.person.firstName} {inv.student.person.lastName}
-                        </td>
-                        <td className={tdMuted}>{campusName.get(inv.campusId) ?? "—"}</td>
-                        <td className={tdMuted}>{inv.periodLabel}</td>
-                        <td className={tdMuted}>{inv.dueDate.toLocaleDateString()}</td>
-                        <td className="py-2 pr-4 text-right text-sm font-medium">{formatMoney(inv.balance)}</td>
-                        <td className={`py-2 text-right text-xs font-semibold ${agingColor(bucket)}`}>{bucket}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* ── Collections ── */}
-      {tab === "collections" && (
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold">Payments received</h3>
-            <span className="text-sm text-[color:var(--color-muted)]">
-              {collections.length} payment{collections.length !== 1 ? "s" : ""} ·{" "}
-              <strong>{formatMoney(collections.reduce((s, p) => s + p.amount, 0))}</strong> collected
-            </span>
-          </div>
-          {collections.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-muted)]">No payments recorded yet.</p>
-          ) : (
+      <Card className="mb-6">
+        <form method="get" className="flex flex-wrap items-end gap-3 text-sm">
+          <input type="hidden" name="tab" value={tab} />
+          {showDates && (
             <>
-              {/* Summary by method */}
-              <div className="mb-4 flex flex-wrap gap-4">
-                {Object.entries(
-                  collections.reduce<Record<string, number>>((acc, p) => {
-                    acc[p.method] = (acc[p.method] ?? 0) + p.amount;
-                    return acc;
-                  }, {}),
-                ).map(([method, total]) => (
-                  <div key={method} className="rounded-lg bg-[color:var(--color-surface-raised)] px-3 py-2 text-sm">
-                    <span className="text-[color:var(--color-muted)]">{method}</span>{" "}
-                    <span className="font-semibold">{formatMoney(total)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr>
-                      <th className={thCls}>Receipt</th>
-                      <th className={thCls}>Student</th>
-                      <th className={thCls}>Campus</th>
-                      <th className={thCls}>Method</th>
-                      <th className={thCls}>Reference</th>
-                      <th className={thCls}>Date</th>
-                      <th className={thCls + " text-right pr-0"}>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[color:var(--color-line)]">
-                    {collections.map((p) => (
-                      <tr key={p.id}>
-                        <td className={tdCls + " font-medium"}>{p.number}</td>
-                        <td className={tdCls}>
-                          {p.student.person.firstName} {p.student.person.lastName}
-                        </td>
-                        <td className={tdMuted}>{campusName.get(p.campusId) ?? "—"}</td>
-                        <td className={tdMuted}>{p.method}</td>
-                        <td className={tdMuted}>{p.reference ?? "—"}</td>
-                        <td className={tdMuted}>{p.receivedAt.toLocaleDateString()}</td>
-                        <td className="py-2 text-right text-sm font-semibold text-green-700">
-                          {formatMoney(p.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <label><span className={labelCls}>From</span><input type="date" name="from" defaultValue={formatDay(from)} className={inputCls} /></label>
+              <label><span className={labelCls}>To</span><input type="date" name="to" defaultValue={formatDay(to)} className={inputCls} /></label>
             </>
           )}
-        </Card>
-      )}
+          {tab !== "ledger" && campusOptions.length > 1 && (
+            <label><span className={labelCls}>Campus</span>
+              <select name="campusId" defaultValue={campusId ?? ""} className={inputCls}><option value="">All campuses</option>{campusOptions.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select></label>
+          )}
+          {tab === "collections" && (
+            <label><span className={labelCls}>Method</span>
+              <select name="method" defaultValue={method ?? ""} className={inputCls}><option value="">All methods</option>{METHODS.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
+          )}
+          {tab === "outstanding" && (
+            <label><span className={labelCls}>Grade</span>
+              <select name="gradeLevelId" defaultValue={gradeLevelId ?? ""} className={inputCls}><option value="">All grades</option>{grades.map((g) => <option key={g.id} value={g.id}>{g.name}{campusOptions.length > 1 ? ` (${names.get(g.campusId)})` : ""}</option>)}</select></label>
+          )}
+          {tab === "ledger" && (
+            <label><span className={labelCls}>Admission number</span><input name="admission" defaultValue={sp.admission ?? ""} className={inputCls} /></label>
+          )}
+          <button className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white hover:bg-brand-700">Run report</button>
+          {tab !== "ledger" && <a href={csv(tab)} className="rounded-lg bg-white px-3 py-2 font-medium ring-1 ring-inset ring-[color:var(--color-line)] hover:bg-slate-50">Download CSV</a>}
+        </form>
+        {rangeError && <p className="mt-3 text-sm text-red-700">{rangeError}</p>}
+      </Card>
 
-      {/* ── Concessions ── */}
-      {tab === "concessions" && (
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold">Credit notes & concessions</h3>
-            <span className="text-sm text-[color:var(--color-muted)]">
-              {concessions.length} note{concessions.length !== 1 ? "s" : ""} ·{" "}
-              <strong>{formatMoney(concessions.reduce((s, c) => s + c.amount, 0))}</strong> adjusted
-            </span>
-          </div>
-          {concessions.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-muted)]">No credit notes issued.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className={thCls}>Invoice</th>
-                    <th className={thCls}>Student</th>
-                    <th className={thCls}>Reason</th>
-                    <th className={thCls}>Date</th>
-                    <th className={thCls + " text-right pr-0"}>Amount</th>
-                  </tr>
-                </thead>
+      {data?.collections && (() => {
+        const d = data.collections;
+        return (
+          <>
+            <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <Stat label="Collected" value={formatMoney(d.total)} />
+              <Stat label="Receipts" value={String(d.rows.length)} />
+              {d.byMethod.slice(0, 2).map((m) => <Stat key={m.key} label={m.key} value={formatMoney(m.total)} />)}
+            </div>
+            {d.truncated && <p className="mb-3 text-sm text-amber-700">Showing the first 5,000 receipts. Narrow the dates.</p>}
+            {d.rows.length === 0 ? <EmptyState title="No collections in this range" hint="Widen the dates or clear the filters." /> : (
+              <div className="grid gap-6 lg:grid-cols-3">
+                <Card className="lg:col-span-2 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr><th className={th}>Receipt</th><th className={th}>Date</th><th className={th}>Student</th><th className={th}>Method</th><th className={`${th} text-right`}>Amount</th></tr></thead>
+                    <tbody className="divide-y divide-[color:var(--color-line)]">
+                      {[...d.rows].reverse().map((p) => (
+                        <tr key={p.id}>
+                          <td className="py-2 pr-4"><Link href={`/portal/fees/receipt/${p.id}`} className="text-brand-700 hover:underline">{p.number}</Link></td>
+                          <td className="py-2 pr-4 whitespace-nowrap">{formatDay(p.receivedAt)}</td>
+                          <td className="py-2 pr-4">{p.student.person.firstName} {p.student.person.lastName}</td>
+                          <td className="py-2 pr-4">{p.method}</td>
+                          <td className="py-2 text-right">{formatMoney(p.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Card>
+                <div className="space-y-6">
+                  <Card>
+                    <h3 className="mb-2 text-sm font-semibold">By method</h3>
+                    {d.byMethod.map((m) => <p key={m.key} className="flex justify-between text-sm"><span>{m.key} <span className="text-[color:var(--color-muted)]">({m.count})</span></span><span>{formatMoney(m.total)}</span></p>)}
+                  </Card>
+                  <Card>
+                    <h3 className="mb-2 text-sm font-semibold">By day</h3>
+                    <div className="max-h-64 overflow-y-auto">{d.byDay.map((m) => <p key={m.key} className="flex justify-between text-sm"><span>{m.key}</span><span>{formatMoney(m.total)}</span></p>)}</div>
+                  </Card>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
+
+      {data?.outstanding && (() => {
+        const d = data.outstanding;
+        return (
+          <>
+            <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <Stat label="Total outstanding" value={formatMoney(d.total)} />
+              <Stat label="Overdue" value={formatMoney(d.overdueTotal)} />
+              <Stat label="Open invoices" value={String(d.rows.length)} />
+            </div>
+            {d.truncated && <p className="mb-3 text-sm text-amber-700">Showing the first 5,000 invoices. Filter by campus or grade.</p>}
+            {d.rows.length === 0 ? <EmptyState title="Nothing outstanding" hint="Every invoice in scope is paid." /> : (
+              <>
+                <Card className="mb-6">
+                  <h3 className="mb-2 text-sm font-semibold">Aging</h3>
+                  <div className="grid gap-2 sm:grid-cols-5">
+                    {AGING_BUCKETS.map((b) => {
+                      const x = d.byBucket.find((r) => r.key === b);
+                      return <div key={b} className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-[color:var(--color-muted)]">{b}</p><p className="font-semibold">{formatMoney(x?.total ?? 0)}</p><p className="text-xs text-[color:var(--color-muted)]">{x?.count ?? 0} invoice(s)</p></div>;
+                    })}
+                  </div>
+                </Card>
+                <Card className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr><th className={th}>Invoice</th><th className={th}>Student</th><th className={th}>Campus</th><th className={th}>Due</th><th className={th}>Aging</th><th className={`${th} text-right`}>Balance</th></tr></thead>
+                    <tbody className="divide-y divide-[color:var(--color-line)]">
+                      {d.rows.map((r) => (
+                        <tr key={r.id}>
+                          <td className="py-2 pr-4"><Link href={`/portal/fees/invoices/${r.id}`} className="text-brand-700 hover:underline">{r.number}</Link></td>
+                          <td className="py-2 pr-4">{r.student.person.firstName} {r.student.person.lastName} <span className="text-xs text-[color:var(--color-muted)]">{r.student.admissionNumber}</span></td>
+                          <td className="py-2 pr-4 text-[color:var(--color-muted)]">{names.get(r.campusId)}</td>
+                          <td className="py-2 pr-4 whitespace-nowrap">{formatDay(r.dueDate)}</td>
+                          <td className="py-2 pr-4"><Badge tone={r.overdueDays === 0 ? "green" : r.overdueDays <= 30 ? "amber" : "red"}>{r.bucket}</Badge></td>
+                          <td className="py-2 text-right font-medium">{formatMoney(r.balance)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Card>
+              </>
+            )}
+          </>
+        );
+      })()}
+
+      {data?.discounts && (
+        <>
+          <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4"><Stat label="Total discounts & write-offs" value={formatMoney(data.discounts.total)} /><Stat label="Entries" value={String(data.discounts.rows.length)} /></div>
+          {data.discounts.rows.length === 0 ? <EmptyState title="None in this range" hint="Credit notes and write-offs appear here." /> : (
+            <Card className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr><th className={th}>Date</th><th className={th}>Invoice</th><th className={th}>Student</th><th className={th}>Reason</th><th className={`${th} text-right`}>Amount</th></tr></thead>
                 <tbody className="divide-y divide-[color:var(--color-line)]">
-                  {concessions.map((c) => (
-                    <tr key={c.id}>
-                      <td className={tdCls}>
-                        <Link href={`/portal/fees/invoices/${c.invoice.id}`} className="text-brand-700 hover:underline">
-                          {c.invoice.number}
-                        </Link>
-                      </td>
-                      <td className={tdCls}>
-                        {c.invoice.student.person.firstName} {c.invoice.student.person.lastName}
-                      </td>
-                      <td className={tdMuted}>{c.reason}</td>
-                      <td className={tdMuted}>{c.createdAt.toLocaleDateString()}</td>
-                      <td className="py-2 text-right text-sm font-semibold text-amber-700">
-                        {formatMoney(c.amount)}
-                      </td>
-                    </tr>
+                  {[...data.discounts.rows].reverse().map((n) => (
+                    <tr key={n.id}><td className="py-2 pr-4">{formatDay(n.createdAt)}</td><td className="py-2 pr-4">{n.invoice.number}</td><td className="py-2 pr-4">{n.invoice.student.person.firstName} {n.invoice.student.person.lastName}</td><td className="py-2 pr-4">{n.reason}</td><td className="py-2 text-right">{formatMoney(n.amount)}</td></tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Card>
           )}
-        </Card>
+        </>
       )}
 
-      {/* ── Student Ledger ── */}
-      {tab === "ledger" && (
-        <div className="space-y-4">
-          {ledger.length === 0 ? (
-            <Card>
-              <p className="text-sm text-[color:var(--color-muted)]">No enrolled students in your scope.</p>
+      {data?.refunds && (
+        <>
+          <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4"><Stat label="Total refunded" value={formatMoney(data.refunds.total)} /><Stat label="Refunds" value={String(data.refunds.rows.length)} /></div>
+          {data.refunds.rows.length === 0 ? <EmptyState title="No refunds in this range" hint="Approved refunds appear here." /> : (
+            <Card className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr><th className={th}>Date</th><th className={th}>Student</th><th className={th}>Method</th><th className={th}>Reason</th><th className={`${th} text-right`}>Amount</th></tr></thead>
+                <tbody className="divide-y divide-[color:var(--color-line)]">
+                  {[...data.refunds.rows].reverse().map((r) => (
+                    <tr key={r.id}><td className="py-2 pr-4">{formatDay(r.createdAt)}</td><td className="py-2 pr-4">{r.student.name} <span className="text-xs text-[color:var(--color-muted)]">{r.student.admissionNumber}</span></td><td className="py-2 pr-4">{r.method}</td><td className="py-2 pr-4">{r.reason}</td><td className="py-2 text-right">{formatMoney(r.amount)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
             </Card>
-          ) : (
-            ledger.map((s) => {
-              const totalBilled = s.invoices.reduce((sum, i) => sum + i.total, 0);
-              const totalBalance = s.invoices.reduce((sum, i) => sum + i.balance, 0);
-              const totalPaid = s.payments.reduce((sum, p) => sum + p.amount, 0);
-              return (
-                <Card key={s.id}>
-                  <div className="mb-3 flex items-start justify-between">
-                    <div>
-                      <Link href={`/portal/students/${s.id}`} className="font-semibold text-brand-700 hover:underline">
-                        {s.person.firstName} {s.person.lastName}
-                      </Link>
-                      <p className="text-xs text-[color:var(--color-muted)]">{s.admissionNumber}</p>
-                    </div>
-                    <div className="flex gap-4 text-sm">
-                      <span className="text-[color:var(--color-muted)]">Billed: <strong>{formatMoney(totalBilled)}</strong></span>
-                      <span className="text-green-700">Paid: <strong>{formatMoney(totalPaid)}</strong></span>
-                      <span className={totalBalance > 0 ? "text-amber-700" : "text-green-700"}>
-                        Balance: <strong>{formatMoney(totalBalance)}</strong>
-                      </span>
-                    </div>
-                  </div>
-                  {s.invoices.length === 0 ? (
-                    <p className="text-xs text-[color:var(--color-muted)]">No invoices.</p>
-                  ) : (
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-left text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-muted)]">
-                          <th className="pb-1 pr-3">Invoice</th>
-                          <th className="pb-1 pr-3">Period</th>
-                          <th className="pb-1 pr-3">Status</th>
-                          <th className="pb-1 pr-3 text-right">Total</th>
-                          <th className="pb-1 text-right">Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[color:var(--color-line)]">
-                        {s.invoices.map((inv) => (
-                          <tr key={inv.id}>
-                            <td className="py-1 pr-3">
-                              <Link href={`/portal/fees/invoices/${inv.id}`} className="text-brand-700 hover:underline">
-                                {inv.number}
-                              </Link>
-                            </td>
-                            <td className="py-1 pr-3 text-[color:var(--color-muted)]">{inv.periodLabel}</td>
-                            <td className="py-1 pr-3 text-[color:var(--color-muted)]">{inv.status}</td>
-                            <td className="py-1 pr-3 text-right">{formatMoney(inv.total)}</td>
-                            <td className={`py-1 text-right font-medium ${inv.balance > 0 ? "text-amber-700" : "text-green-700"}`}>
-                              {formatMoney(inv.balance)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </Card>
-              );
-            })
           )}
-          {ledger.length === 50 && (
-            <p className="text-center text-xs text-[color:var(--color-muted)]">
-              Showing first 50 students. Use the Students page to find specific records.
-            </p>
-          )}
-        </div>
+        </>
+      )}
+
+      {tab === "ledger" && (
+        sp.admission ? (
+          ledger ? (
+            <div className="space-y-6">
+              <Card><p className="font-semibold">{ledger.person.firstName} {ledger.person.lastName} <span className="text-sm font-normal text-[color:var(--color-muted)]">{ledger.admissionNumber}</span></p></Card>
+              <Card className="overflow-x-auto">
+                <h3 className="mb-2 text-sm font-semibold">Invoices</h3>
+                {ledger.invoices.length === 0 ? <p className="text-sm text-[color:var(--color-muted)]">None.</p> : (
+                  <table className="w-full text-sm">
+                    <thead><tr><th className={th}>Invoice</th><th className={th}>Issued</th><th className={th}>Status</th><th className={`${th} text-right`}>Total</th><th className={`${th} text-right`}>Balance</th></tr></thead>
+                    <tbody className="divide-y divide-[color:var(--color-line)]">{ledger.invoices.map((i) => <tr key={i.id}><td className="py-2 pr-4"><Link href={`/portal/fees/invoices/${i.id}`} className="text-brand-700 hover:underline">{i.number}</Link></td><td className="py-2 pr-4">{formatDay(i.issueDate)}</td><td className="py-2 pr-4">{i.status}</td><td className="py-2 pr-4 text-right">{formatMoney(i.total)}</td><td className="py-2 text-right">{formatMoney(i.balance)}</td></tr>)}</tbody>
+                  </table>
+                )}
+              </Card>
+              <Card className="overflow-x-auto">
+                <h3 className="mb-2 text-sm font-semibold">Payments</h3>
+                {ledger.payments.length === 0 ? <p className="text-sm text-[color:var(--color-muted)]">None.</p> : (
+                  <table className="w-full text-sm">
+                    <thead><tr><th className={th}>Receipt</th><th className={th}>Date</th><th className={th}>Method</th><th className={th}>Status</th><th className={`${th} text-right`}>Amount</th></tr></thead>
+                    <tbody className="divide-y divide-[color:var(--color-line)]">{ledger.payments.map((p) => <tr key={p.id}><td className="py-2 pr-4"><Link href={`/portal/fees/receipt/${p.id}`} className="text-brand-700 hover:underline">{p.number}</Link></td><td className="py-2 pr-4">{formatDay(p.receivedAt)}</td><td className="py-2 pr-4">{p.method}</td><td className="py-2 pr-4">{p.status}</td><td className="py-2 text-right">{formatMoney(p.amount)}</td></tr>)}</tbody>
+                  </table>
+                )}
+              </Card>
+            </div>
+          ) : <EmptyState title="Student not found" hint="Check the admission number and your campus access." />
+        ) : <EmptyState title="Find a student" hint="Enter an admission number to see their invoices and payments." />
       )}
     </div>
   );

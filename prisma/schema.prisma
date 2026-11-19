@@ -1857,7 +1857,15 @@ model BankStatementLine {
   status          ReconciliationStatus @default(UNMATCHED)
   matchedPaymentId String?
   importBatchId   String?
+  // Hash of the line's content (+ its occurrence within the file) so re-importing
+  // the same statement adds nothing.
+  dedupeKey       String?
+  matchedByUserId String?
+  matchedAt       DateTime?
+  note            String?
 
+  @@unique([tenantId, campusId, dedupeKey])
+  @@unique([tenantId, matchedPaymentId])
   @@index([tenantId])
   @@index([campusId])
   @@index([status])

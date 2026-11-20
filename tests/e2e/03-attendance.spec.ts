@@ -1,49 +1,40 @@
 /**
- * E2E spec 3: Attendance — submit register
- *
- * Verifies:
- * - Teacher can navigate to attendance
- * - Attendance sessions list renders (seeded data)
- * - Teacher can open or start an attendance session page without error
+ * E2E: a teacher takes a register through the UI and it persists.
  */
-
 import { test, expect } from "@playwright/test";
 import { login, logout } from "./helpers";
+import { db } from "./db";
 
-test.describe("Attendance module", () => {
+test.describe("Attendance register", () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, "teacher@greenwood.edu");
+    await login(page, "teacher@hmss.edu");
   });
-
   test.afterEach(async ({ page }) => {
     await logout(page);
   });
 
-  test("attendance page loads and shows sessions list", async ({ page }) => {
+  test("teacher marks a student, saves a draft, and the mark is stored", async ({ page }) => {
     await page.goto("/portal/attendance");
-    await expect(page).toHaveURL(/\/portal\/attendance/);
+    await expect(page.getByRole("heading", { name: /attendance/i }).first()).toBeVisible();
 
-    // Heading
-    await expect(page.getByRole("heading", { name: /attendance/i })).toBeVisible();
+    const sectionLink = page.locator('main a[href^="/portal/attendance/"]:not([href$="/leave"]):not([href$="/reports"]):not([href$="/analytics"])').first();
+    await expect(sectionLink).toBeVisible();
+    const href = (await sectionLink.getAttribute("href"))!;
+    expect(href).toMatch(/\/portal\/attendance\/[^/]+$/);
+    await page.goto(href);
+    await page.waitForLoadState("networkidle"); // let React hydrate before clicking
 
-    // There should be content (either sessions or a new-session prompt)
-    await expect(page.locator("main").first()).toBeVisible();
-  });
+    const rows = page.locator("tbody tr");
+    await expect(rows.first()).toBeVisible();
+    const admission = (await rows.first().locator("p").nth(1).innerText()).trim();
 
-  test("can navigate to a section's attendance page", async ({ page }) => {
-    await page.goto("/portal/attendance");
+    // Mark the first student with the first code button, then save as a draft.
+    await rows.first().locator("button").first().click();
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await expect(page.getByText("Draft saved.")).toBeVisible();
 
-    // Look for any link to an attendance session or section
-    const link = page.locator("main a").first();
-    const count = await page.locator("main a").count();
-    if (count > 0) {
-      const href = await link.getAttribute("href");
-      if (href && href.includes("/portal/attendance/")) {
-        await link.click();
-        await expect(page.locator("main").first()).toBeVisible();
-      }
-    }
-    // Either way the page should not 500
-    await expect(page.locator("body")).not.toContainText("Application error");
+    const student = await db.student.findFirstOrThrow({ where: { admissionNumber: admission } });
+    const records = await db.attendanceRecord.findMany({ where: { studentId: student.id } });
+    expect(records.length).toBeGreaterThan(0);
   });
 });

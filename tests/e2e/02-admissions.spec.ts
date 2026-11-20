@@ -12,7 +12,7 @@ import { login, logout } from "./helpers";
 
 test.describe("Admissions pipeline", () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, "admissions@greenwood.edu");
+    await login(page, "admissions@hmss.edu");
   });
 
   test.afterEach(async ({ page }) => {

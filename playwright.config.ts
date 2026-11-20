@@ -1,23 +1,29 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// PORT env var is set by the launch.json dev server or overridden manually.
-// Default to 3000 for CI; locally the dev server picks a free port.
-const BASE_URL = process.env.TEST_BASE_URL ?? "http://localhost:3000";
+// The suite never touches the development database. globalSetup rebuilds the
+// disposable `sms_e2e` database (migrations + seed) and the web server below is
+// started against it on its own port.
+const PORT = Number(process.env.E2E_PORT ?? 3100);
+const E2E_DATABASE_URL =
+  process.env.E2E_DATABASE_URL ?? "postgresql://sms:sms_dev_password@localhost:5433/sms_e2e?schema=public";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  timeout: 30_000,
+  globalSetup: "./tests/e2e/global-setup.ts",
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   retries: process.env.CI ? 2 : 0,
+  workers: 1, // specs share one seeded database and mutate it
   use: {
-    baseURL: BASE_URL,
+    baseURL: `http://localhost:${PORT}`,
     trace: "on-first-retry",
   },
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-    },
-  ],
-  // Require the dev server to already be running (start it with `npm run dev`).
-  // Set TEST_BASE_URL=http://localhost:<port> when the dev server uses a non-3000 port.
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  webServer: {
+    command: `npx next dev -p ${PORT}`,
+    url: `http://localhost:${PORT}/login`,
+    reuseExistingServer: false,
+    timeout: 120_000,
+    env: { DATABASE_URL: E2E_DATABASE_URL },
+  },
 });

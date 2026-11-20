@@ -12,7 +12,7 @@ import { login, logout } from "./helpers";
 
 test.describe("Billing / fees module", () => {
   test.beforeEach(async ({ page }) => {
-    await login(page, "finance@greenwood.edu");
+    await login(page, "finance@hmss.edu");
   });
 
   test.afterEach(async ({ page }) => {

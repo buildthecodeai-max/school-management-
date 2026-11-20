@@ -165,7 +165,7 @@ export default async function RegisterPage({
         leaveStudentIds={leaveStudentIds}
         date={dayStr}
         needsReason={needsReason}
-        key={dayStr + status}
+        key={dayStr}
       />
 
       {session && status === "SUBMITTED" && canAmend && (

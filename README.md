@@ -197,7 +197,8 @@ sessions are random tokens stored in the database, so there is no signing key.
 | `npm run setup` | `db:up` + schema push + seed |
 | `npm test` | Unit tests |
 | `npm run test:integration` | Integration tests (need the database running) |
-| `npm run test:e2e` | Playwright end-to-end tests (need the dev server and the seeded database) |
+| `npm run test:e2e` | Playwright end-to-end tests on a freshly built disposable database (`sms_e2e`) and their own server on port 3100; needs the Docker Postgres up |
+| `npm run e2e:db` | Rebuild only the disposable end-to-end database |
 | `npm run test:all` | Unit and integration tests |
 | `npm run audit:verify` | Verify the audit-log hash chains |
 | `npm run audit:backfill` | Backfill hash chains for older audit rows |
@@ -213,7 +214,7 @@ For a quick local loop `db:push` is still fine; run `db:migrate` before you comm
 | --- | --- | --- |
 | Unit | `tests/unit/` | `npm test`. No database needed. |
 | Integration | `tests/integration/` | `npm run db:up`, then `npm run test:integration`. Runs against the real database in `DATABASE_URL`, creating and then deleting throwaway `itest_` tenants. |
-| End to end | `tests/e2e/` | Start the app with `npm run dev` on a seeded database, install a browser once with `npx playwright install chromium`, then `npm run test:e2e`. Set `TEST_BASE_URL` if the app is not on port 3000. |
+| End to end | `tests/e2e/` | Install a browser once with `npx playwright install chromium`, start the database (`npm run db:up`), then `npm run test:e2e`. It builds its own database and server; it never touches `DATABASE_URL`. Set `E2E_DATABASE_URL` / `E2E_PORT` to change them. |
 
 Integration tests (139) cover tenant isolation, campus switching, search scoping, the audit chain,
 sign-in with two-factor, school provisioning, academic configuration, approvals, fee assignment,
@@ -225,10 +226,13 @@ library and fee-report rules, and **static guards** (`tests/unit/static-guards.t
 when a `"use server"` file exports anything but functions, an internal link points at a page
 that does not exist, a server action has no caller, or an action takes a school id as an argument.
 
-**End-to-end specs are stale.** `tests/e2e/` still signs in with `*@greenwood.edu` demo accounts
-that the current seed no longer creates (it creates `*@hmss.edu`), and the specs write records,
-so they have not been run in this pass. Update the accounts and run them against a disposable
-database before relying on them.
+**End-to-end specs** (`tests/e2e/`, 18 tests) run against a disposable database, never the development
+one. `npm run test:e2e` rebuilds `sms_e2e` from the migrations and seed (`scripts/e2e-db.ts`, which refuses
+any database whose name does not end in `_e2e`), starts its own `next dev` on port 3100 pointed at it, and
+runs the specs one at a time. Specs that change data check the database afterwards rather than trusting the
+screen. They cover sign-in and navigation by role, admissions, the attendance register, fees pages, HR and
+its denial for restricted roles, the parent portal (own children only, 404 for others) and user and role
+management.
 
 Type-check with `npx tsc --noEmit` (currently clean). `npm run build` also type-checks every
 `.ts` file in the repository, including `scripts/`, so a type error in a one-off script fails

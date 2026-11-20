@@ -13,22 +13,22 @@ import { login, logout } from "./helpers";
 test.describe("HR module", () => {
   test("org owner sees HR module with all tabs", async ({ page }) => {
     // Owner has wildcard permissions — can access all modules
-    await login(page, "owner@greenwood.edu");
+    await login(page, "owner@hmss.edu");
     await page.goto("/portal/hr");
     await expect(page).toHaveURL(/\/portal\/hr/);
 
     await expect(page.getByRole("heading", { name: /human resources/i })).toBeVisible();
 
     // Sub-tabs
-    await expect(page.getByRole("link", { name: /staff/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /leave/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /separations/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: "staff", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: /leave approvals/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^separations/ })).toBeVisible();
 
     await logout(page);
   });
 
   test("leave approvals tab renders without error", async ({ page }) => {
-    await login(page, "owner@greenwood.edu");
+    await login(page, "owner@hmss.edu");
     await page.goto("/portal/hr?tab=leave");
 
     await expect(page.locator("main").first()).toBeVisible();
@@ -38,26 +38,12 @@ test.describe("HR module", () => {
   });
 
   test("safeguarding officer is denied access to HR (permission gate)", async ({ page }) => {
-    await login(page, "safeguarding@greenwood.edu");
+    await login(page, "safeguarding@hmss.edu");
     await page.goto("/portal/hr");
 
-    // Should be redirected away (to /portal) since they lack hr.staff.read
-    await expect(page).not.toHaveURL(/\/portal\/hr/, { timeout: 5_000 }).catch(() => {
-      // If URL didn't change, the page should show an error/redirect message
-    });
-
-    // Either redirected or shows access denied — not full HR content
-    const hasHrHeading = await page.getByRole("heading", { name: /human resources/i }).isVisible().catch(() => false);
-    // It's acceptable if they were redirected to dashboard
-    // What's NOT acceptable is them seeing the HR data
-    if (!hasHrHeading) {
-      // Redirected — correct behaviour
-      expect(true).toBe(true);
-    } else {
-      // They saw the heading — check they're actually blocked
-      // requirePermission should have redirected; a heading visible means a bug
-      throw new Error("Safeguarding officer should not have access to HR module");
-    }
+    // Deny-by-default: the server redirects to the dashboard with the missing permission.
+    await expect(page).not.toHaveURL(/\/portal\/hr/);
+    await expect(page.getByRole("heading", { name: /human resources/i })).toHaveCount(0);
 
     await logout(page);
   });

@@ -17,7 +17,7 @@ This report covers the work from commit `de7986a` to `5888a52` (11 commits chang
 | Unit tests (`npm test`) | 142 passed, 23 files |
 | Integration tests (real Postgres, throwaway tenants) | 139 passed, 25 files, stable over repeated runs |
 | Browser checks | Read-only passes over the new screens against the demo school, as the owner, campus admin and parent |
-| End-to-end (Playwright) | **Not run.** The specs sign in with `*@greenwood.edu` accounts that the current seed does not create, and they write records. They need updating and a disposable database |
+| End-to-end (Playwright) | 18 passed on a disposable database built from the migrations and seed, with its own server. Running it found one real defect (the attendance register lost its save confirmation), now fixed. The fees specs are page-load checks only; they do not exercise payments |
 
 What "verified" does and does not mean here: every server action has integration tests that call
 it as different users and check permissions, validation, persistence, audit entries and

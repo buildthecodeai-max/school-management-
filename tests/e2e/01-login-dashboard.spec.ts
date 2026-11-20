@@ -13,7 +13,7 @@ import { login, logout } from "./helpers";
 
 test.describe("Login and role-scoped dashboard", () => {
   test("teacher sees staff dashboard with permitted nav items only", async ({ page }) => {
-    await login(page, "teacher@greenwood.edu");
+    await login(page, "teacher@hmss.edu");
 
     // Should be on portal
     await expect(page).toHaveURL(/\/portal/);
@@ -38,7 +38,7 @@ test.describe("Login and role-scoped dashboard", () => {
   });
 
   test("safeguarding officer sees health and safeguarding nav; NOT admin items", async ({ page }) => {
-    await login(page, "safeguarding@greenwood.edu");
+    await login(page, "safeguarding@hmss.edu");
 
     const sidebar = page.locator("aside");
     await expect(sidebar.getByRole("link", { name: "Health" })).toBeVisible();
@@ -52,7 +52,7 @@ test.describe("Login and role-scoped dashboard", () => {
   });
 
   test("campus admin can access campuses, setup and core modules", async ({ page }) => {
-    await login(page, "admin@greenwood.edu");
+    await login(page, "admin@hmss.edu");
 
     const sidebar = page.locator("aside");
     await expect(sidebar.getByRole("link", { name: "Campuses" })).toBeVisible();
